@@ -27,7 +27,7 @@ interface Overview {
     roundCount: number;
     roundSeconds: number;
     phase: { kind: string; round?: number; nextRound?: number; endsAt?: number };
-    submitted: number;
+    letters: number;
   }[];
   lobby: { id: string; nickname: string; demo: boolean; online: boolean; priority: number; waitedSec: number; interests: number }[];
   invites: {
@@ -45,7 +45,7 @@ interface Overview {
 const INVITE_STATUS: Record<string, string> = { open: "응답 받는 중", started: "시작됨", confirmed: "예약 확정", expired: "무산" };
 
 const SLOT_STATUS: Record<string, string> = { open: "모집 중", forming: "그룹 나누는 중", started: "진행됨", cancelled: "취소됨" };
-const GROUP_STATUS: Record<string, string> = { ready: "시작 전", live: "대화 중", choosing: "선택 중", done: "종료" };
+const GROUP_STATUS: Record<string, string> = { ready: "시작 전", live: "대화 중", done: "종료" };
 
 export default function AdminPage() {
   const [key, setKey] = useState("");
@@ -261,7 +261,7 @@ export default function AdminPage() {
                   {g.roundCount}라운드 · 라운드당 {g.roundSeconds < 60 ? `${g.roundSeconds}초` : `${Math.round(g.roundSeconds / 60)}분`}
                   {ph.kind === "talk" && ` · 지금 ${ph.round! + 1}라운드 (${fmtClock(left)} 남음)`}
                   {ph.kind === "break" && ` · 쉬는 시간 (${fmtClock(left)})`}
-                  {g.status === "choosing" && ` · 선택 제출 ${g.submitted}/${g.members.length}`}
+                  {g.status === "done" && ` · 쪽지 ${g.letters}개`}
                 </p>
               </div>
             );

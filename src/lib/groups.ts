@@ -24,8 +24,9 @@ export function createGroup(
     roundSeconds: opts.roundSeconds ?? ROUND_SECONDS(),
     breakSeconds: BREAK_SECONDS(),
     startedAt: Date.now() + opts.startInMs,
-    choices: {},
-    submitted: [],
+    letters: {},
+    memos: {},
+    reveals: {},
   };
   db.groups[group.id] = group;
   for (const id of opts.memberIds) {

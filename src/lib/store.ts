@@ -11,7 +11,7 @@ const DATA_FILE = path.join(DATA_DIR, "hiro-db.json");
 const g = globalThis as unknown as { __hiroDb?: DB };
 
 function empty(): DB {
-  return { users: {}, groups: {}, slots: {}, catalog: null, catalogCursor: 0, lobby: {}, invites: {} };
+  return { users: {}, groups: {}, slots: {}, catalog: null, catalogCursor: 0, lobby: {}, invites: {}, chats: {} };
 }
 
 function load(): DB {

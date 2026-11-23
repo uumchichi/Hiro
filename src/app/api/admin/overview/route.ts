@@ -30,7 +30,7 @@ export async function GET() {
         roundCount: g.rounds.length,
         roundSeconds: g.roundSeconds,
         phase: currentPhase(g),
-        submitted: g.submitted.length,
+        letters: Object.values(g.letters).reduce((n, m) => n + Object.keys(m).length, 0),
       };
     });
   const slots = Object.values(db.slots)

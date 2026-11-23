@@ -54,7 +54,7 @@ export interface Theme {
   icebreakers?: string[]; // 이 테마의 1:1 대화 주제
 }
 
-export type GroupStatus = "ready" | "live" | "choosing" | "done";
+export type GroupStatus = "ready" | "live" | "done";
 
 export interface Pair {
   a: string;
@@ -78,8 +78,13 @@ export interface Group {
   roundSeconds: number;
   breakSeconds: number;
   startedAt?: number;
-  choices: Record<string, string[]>; // userId -> 호감 표시한 userId 목록
-  submitted: string[]; // 선택을 제출한 userId
+  // 쪽지: 상대에게 보내는 애프터 신청. 로테이션이 끝난 뒤 익명으로 전달됩니다. letters[보낸 사람][받는 사람]
+  letters: Record<string, Record<string, string>>;
+  // 메모: 나만 보는 기록. memos[쓴 사람][상대]
+  memos: Record<string, Record<string, string>>;
+  // 쪽지의 주인 찾기: 한 사람당 단 한 번. reveals[찾은 사람] = 쪽지를 보낸 사람
+  reveals: Record<string, string>;
+  finishedAt?: number;
 }
 
 /** 테마 세션: 정해진 시간에 열리고, 신청 후 대기실에 들어온 사람끼리 그룹이 됩니다. */
@@ -136,6 +141,23 @@ export interface Invite {
   demoPlan?: Record<string, { at: number; accept: boolean }>; // 데모 참가자 자동 응답
 }
 
+/** 서로 쪽지의 주인을 찾으면 열리는 24시간 채팅방 */
+export interface ChatMessage {
+  id: string;
+  from: string;
+  text: string;
+  at: number;
+}
+
+export interface Chat {
+  id: string;
+  groupId: string;
+  members: [string, string];
+  createdAt: number;
+  expiresAt: number;
+  messages: ChatMessage[];
+}
+
 export interface DB {
   users: Record<string, User>;
   groups: Record<string, Group>;
@@ -144,4 +166,5 @@ export interface DB {
   catalogCursor: number;
   lobby: Record<string, LobbyEntry>;
   invites: Record<string, Invite>;
+  chats: Record<string, Chat>;
 }

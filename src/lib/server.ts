@@ -3,6 +3,7 @@ import { cookies, headers } from "next/headers";
 import { AccessToken } from "livekit-server-sdk";
 import { mutate, newId, readDb } from "./store";
 import { mdpLabel, normalizePrefs, normalizeTraits, tgColor, tgLabel } from "./compat";
+import { finishGroup, metPartners } from "./notes";
 import { currentPhase, partnerIn, roomName } from "./rotation";
 import type { Group, User } from "./types";
 
@@ -49,24 +50,23 @@ export async function livekitToken(identity: string, name: string, room: string)
   return at.toJwt();
 }
 
-/** 끝난 세션의 상태를 시간에 맞춰 넘깁니다 (live → choosing). */
+/** 끝난 로테이션을 시간에 맞춰 마무리합니다 (live → done, 쪽지 전달, 참가자 풀어 주기). */
 export function syncGroupStatus(group: Group) {
   if (group.status === "live" && currentPhase(group).kind === "finished") {
     mutate((db) => {
       const g = db.groups[group.id];
-      g.status = "choosing";
-      // 데모 참가자는 무작위로 호감을 표시해 혼자서도 결과 화면을 확인할 수 있게 합니다.
-      for (const id of g.memberIds) {
-        if (!db.users[id]?.isDemo) continue;
-        g.choices[id] = g.memberIds.filter((o) => o !== id && Math.random() < 0.6);
-        if (!g.submitted.includes(id)) g.submitted.push(id);
-      }
+      finishGroup(db, g);
       Object.assign(group, g);
     });
   }
 }
 
-function publicMember(u: User | undefined) {
+/** 로테이션이 끝나서 사용자가 풀려난 뒤에도, 진행 중이던 그룹들을 마무리합니다. */
+export function syncAllGroups() {
+  for (const g of Object.values(readDb().groups)) if (g.status === "live") syncGroupStatus(g);
+}
+
+export function publicMember(u: User | undefined) {
   if (!u) return null;
   return {
     id: u.id,
@@ -98,11 +98,6 @@ export function viewState(userId: string) {
     const phase = currentPhase(g, now);
     const roundIdx = phase.kind === "talk" ? phase.round : phase.kind === "break" ? phase.nextRound : -1;
     const partnerId = roundIdx >= 0 ? partnerIn(g, roundIdx, userId) : null;
-    const myChoices = g.choices[userId] ?? [];
-    const submitted = g.submitted.includes(userId);
-    const mutual = submitted
-      ? myChoices.filter((other) => g.submitted.includes(other) && (g.choices[other] ?? []).includes(userId))
-      : [];
     group = {
       id: g.id,
       theme: g.theme,
@@ -117,10 +112,12 @@ export function viewState(userId: string) {
       members: g.memberIds.map((id) => publicMember(db.users[id])).filter(Boolean) as PublicMember[],
       partner: partnerId ? publicMember(db.users[partnerId]) : null,
       room: phase.kind === "talk" && partnerId ? roomName(g.id, phase.round, userId, partnerId) : null,
-      submitted,
-      myChoices,
-      waitingFor: g.memberIds.filter((id) => !g.submitted.includes(id)).length,
-      mutual: mutual.map((id) => publicMember(db.users[id])).filter(Boolean) as PublicMember[],
+      // 지금까지 만난 사람과 내가 쓴 쪽지·메모
+      met: metPartners(g, userId, now).map((id) => ({
+        member: publicMember(db.users[id]) as PublicMember,
+        letter: g.letters[userId]?.[id] ?? "",
+        memo: g.memos[userId]?.[id] ?? "",
+      })),
     };
   }
   return {
@@ -136,6 +133,11 @@ export function viewState(userId: string) {
       prefs: user.prefs ? normalizePrefs(user.prefs) : null,
     },
     group,
+    // 방금 끝난 로테이션의 리포트 (끝나고 1시간 동안 대화방에서 자동으로 이동)
+    lastReportId:
+      Object.values(db.groups)
+        .filter((g) => g.status === "done" && g.memberIds.includes(userId) && now - (g.finishedAt ?? 0) < 3600_000)
+        .sort((a, b) => (b.finishedAt ?? 0) - (a.finishedAt ?? 0))[0]?.id ?? null,
     voice: { configured: livekitConfigured() },
   };
 }
