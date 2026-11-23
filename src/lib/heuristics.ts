@@ -1,9 +1,9 @@
 // AI(Claude)를 쓸 수 없을 때(API 키 없음, 오류) 쓰는 규칙 기반 로직.
-import { packCompatible } from "./compat";
+import { compatible, packCompatible } from "./compat";
 import { QUESTIONS, TRAIT_LABELS } from "./questions";
-import type { Analysis, Theme, TraitKey, TraitScores, User } from "./types";
+import type { Analysis, PartnerWants, Theme, TraitKey, TraitScores, User } from "./types";
 
-export const GROUP_MIN = Number(process.env.HIRO_GROUP_MIN ?? 3);
+export const GROUP_MIN = Number(process.env.HIRO_GROUP_MIN ?? 4);
 export const GROUP_MAX = Number(process.env.HIRO_GROUP_MAX ?? 6);
 
 export function computeTraits(answers: number[]): TraitScores {
@@ -55,82 +55,88 @@ export function ruleAnalysis(traits: TraitScores, tags: string[]): Analysis {
   };
 }
 
-/** 대기자들의 태그 빈도로 테마를 고릅니다. */
-export function ruleThemes(users: User[], maxThemes = 4): Theme[] {
-  const freq = new Map<string, number>();
-  for (const u of users) for (const t of u.profile?.tags ?? []) freq.set(t, (freq.get(t) ?? 0) + 1);
-  const top = [...freq.entries()]
-    .filter(([, n]) => n >= GROUP_MIN)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, maxThemes);
-  const themes: Theme[] = top.map(([tag], i) => ({
-    id: `t${i + 1}`,
-    title: `${tag} 모여라`,
-    emoji: "✨",
-    description: `'${tag}' 태그를 가진 분들이 모이는 방이에요.`,
-    tags: [tag],
-  }));
-  themes.push({
-    id: `t${themes.length + 1}`,
-    title: "취향 탐색 믹스",
-    emoji: "🎲",
-    description: "다양한 취향을 가진 분들이 섞여 새로운 사람을 만나요.",
-    tags: [],
-  });
-  return themes;
+// 기본 테마 목록. AI 테마 에이전트를 쓸 수 없을 때, 그리고 처음 시작할 때 씁니다.
+const BASE_THEMES: Omit<Theme, "id">[] = [
+  { title: "고양이 집사들의 수다", emoji: "🐈", description: "우리 집 고양이 자랑부터 집사 고민까지.", tags: ["고양이 집사"] },
+  { title: "매운 거 못 먹는 사람들", emoji: "🌶️", description: "맵찔이끼리라면 메뉴 고민 끝!", tags: ["맵찔이"] },
+  { title: "교회 다니는 사람들", emoji: "⛪", description: "신앙을 나눌 수 있는 사람을 만나요.", tags: ["기독교"] },
+  { title: "술 없이도 즐거운 밤", emoji: "🧃", description: "술 안 마셔도 대화가 즐거운 사람들.", tags: ["술 안 마셔요"] },
+  { title: "책 이야기 나누기", emoji: "📚", description: "최근에 읽은 책 한 권으로 시작해요.", tags: ["독서"] },
+  { title: "운동하는 여자들", emoji: "🏃‍♀️", description: "러닝, 요가, 헬스까지 몸 쓰는 이야기.", tags: ["운동", "러닝", "요가/필라테스"] },
+  { title: "집순이 모임", emoji: "🛋️", description: "집에서 보내는 완벽한 주말을 공유해요.", tags: ["집순이"] },
+  { title: "여행 좋아하는 사람", emoji: "✈️", description: "다음 여행지를 같이 꿈꿔요.", tags: ["여행"] },
+  { title: "덕질은 나의 힘", emoji: "💿", description: "무엇이든 좋아하는 마음을 나눠요.", tags: ["덕질", "게임", "영화"] },
+  { title: "취향 탐색 믹스", emoji: "🎲", description: "다양한 취향의 사람들이 섞여 새로운 사람을 만나요.", tags: [] },
+];
+
+export function ruleCatalog(): Theme[] {
+  return BASE_THEMES.map((t, i) => ({ ...t, id: `base${i + 1}`, icebreakers: defaultIcebreakers(t) }));
 }
 
-/** 각 사람을 태그가 가장 많이 겹치는 테마에 넣고, 최대 인원 기준으로 나눕니다. */
-export function ruleGroups(users: User[], themes: Theme[]) {
-  const buckets = new Map<string, User[]>();
-  const fallback = themes[themes.length - 1];
-  for (const u of users) {
-    const tags = new Set(u.profile?.tags ?? []);
-    let best = fallback;
-    let bestScore = 0;
-    for (const t of themes) {
-      const s = t.tags.filter((x) => tags.has(x)).length;
-      if (s > bestScore) {
-        best = t;
-        bestScore = s;
+/**
+ * 한 세션에 모인 사람들을 GROUP_MIN~GROUP_MAX명 그룹으로 고르게 나눕니다.
+ * 그룹 안의 모든 쌍이 서로의 조건(머리 길이·깁텍·문담피)에 맞도록 합니다.
+ */
+export function balancedPack(list: User[]): { chunks: User[][]; leftovers: User[] } {
+  if (list.length < GROUP_MIN) return { chunks: [], leftovers: list };
+  const n = Math.ceil(list.length / GROUP_MAX);
+  const target = Math.max(GROUP_MIN, Math.ceil(list.length / n));
+  if (n === 1) {
+    // 한 그룹이면 조건이 맞는 최대 묶음만 찾으면 됩니다.
+    const { chunks, leftovers } = packCompatible(orderByConstraint(list), GROUP_MIN, GROUP_MAX);
+    return { chunks: chunks.slice(0, 1), leftovers: [...leftovers, ...chunks.slice(1).flat()] };
+  }
+  // 조건이 까다로운 사람부터, 서로 원하는 성향이 잘 맞는 그룹에 배정합니다.
+  const order = orderByConstraint(list);
+  const chunks: User[][] = order.slice(0, n).map((u) => [u]);
+  const rest: User[] = [];
+  for (const u of order.slice(n)) {
+    let best: User[] | null = null;
+    let bestScore = -1;
+    for (const c of chunks) {
+      if (c.length >= target || !c.every((m) => compatible(m, u))) continue;
+      const score = c.reduce((sum, m) => sum + pairScore(m, u), 0) / c.length;
+      if (score > bestScore) {
+        best = c;
+        bestScore = score;
       }
     }
-    if (!buckets.has(best.id)) buckets.set(best.id, []);
-    buckets.get(best.id)!.push(u);
+    if (best) best.push(u);
+    else rest.push(u);
   }
-  // 최소 인원이 안 되는 버킷은 믹스 테마로 합치기
-  for (const [id, list] of [...buckets.entries()]) {
-    if (id !== fallback.id && list.length < GROUP_MIN) {
-      buckets.delete(id);
-      if (!buckets.has(fallback.id)) buckets.set(fallback.id, []);
-      buckets.get(fallback.id)!.push(...list);
-    }
-  }
-  const groups: { themeId: string; memberIds: string[]; reason: string; icebreakers: string[] }[] = [];
-  const split = (themeId: string, list: User[]): User[] => {
-    const theme = themes.find((t) => t.id === themeId)!;
-    // 성향이 비슷한 사람끼리 이웃하도록 에너지 점수로 정렬한 뒤,
-    // 머리 길이·깁텍·문담피 조건이 모든 쌍에서 맞도록 묶습니다.
-    list.sort((a, b) => (a.analysis?.traits.energy ?? 50) - (b.analysis?.traits.energy ?? 50));
-    const { chunks, leftovers } = packCompatible(list, GROUP_MIN, GROUP_MAX);
-    for (const c of chunks) {
-      groups.push({
-        themeId,
-        memberIds: c.map((u) => u.id),
-        reason: `'${theme.title}' 테마와 취향이 맞고, 서로의 만남 조건도 맞는 분들이에요.`,
-        icebreakers: defaultIcebreakers(theme),
-      });
-    }
-    return leftovers;
-  };
-  // 테마 버킷을 먼저 나누고, 남는 사람은 믹스 테마로 보냅니다.
+  // 남은 사람은 자리가 있고 조건이 맞는 그룹에 넣어 봅니다.
   const leftovers: User[] = [];
-  for (const [themeId, list] of buckets) if (themeId !== fallback.id) leftovers.push(...split(themeId, list));
-  const unmatched = split(fallback.id, [...(buckets.get(fallback.id) ?? []), ...leftovers]).map((u) => u.id);
-  return { groups, unmatched };
+  for (const u of rest) {
+    const home = chunks.find((c) => c.length < GROUP_MAX && c.every((m) => compatible(m, u)));
+    if (home) home.push(u);
+    else leftovers.push(u);
+  }
+  const ok = chunks.filter((c) => c.length >= GROUP_MIN);
+  leftovers.push(...chunks.filter((c) => c.length < GROUP_MIN).flat());
+  return { chunks: ok, leftovers };
 }
 
-export function defaultIcebreakers(theme: Theme): string[] {
+/** 다른 사람과 조건이 안 맞는 경우가 많은 사람을 앞에 둡니다. */
+function orderByConstraint(list: User[]) {
+  const blocked = new Map(list.map((u) => [u.id, list.filter((o) => o !== u && !compatible(u, o)).length]));
+  return [...list].sort((a, b) => blocked.get(b.id)! - blocked.get(a.id)!);
+}
+
+/** a가 원하는 상대 성향에 b가 얼마나 가까운지 (0~1). 원하는 게 없으면 0.5 */
+export function wantFit(wants: PartnerWants | undefined, traits: TraitScores | undefined) {
+  if (!wants || !traits) return 0.5;
+  const keys = (Object.keys(wants) as TraitKey[]).filter((k) => wants[k] !== "any");
+  if (!keys.length) return 0.5;
+  const sum = keys.reduce((s, k) => s + (wants[k] === "high" ? traits[k] / 100 : 1 - traits[k] / 100), 0);
+  return sum / keys.length;
+}
+
+/** 서로가 원하는 성향에 얼마나 맞는지 (양방향 평균) */
+export function pairScore(a: User, b: User) {
+  return (wantFit(a.partnerWants, b.analysis?.traits) + wantFit(b.partnerWants, a.analysis?.traits)) / 2;
+}
+
+export function defaultIcebreakers(theme: Pick<Theme, "tags">): string[] {
   const tag = theme.tags[0];
   return [
     tag ? `'${tag}'와 관련해 가장 기억에 남는 순간은?` : "요즘 가장 빠져 있는 건 뭐예요?",

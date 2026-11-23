@@ -8,7 +8,11 @@ import { mutate } from "@/lib/store";
 
 export const maxDuration = 120;
 
-const Body = z.object({ answers: z.array(z.number().int().min(1).max(5)).length(QUESTIONS.length) });
+const Want = z.enum(["low", "any", "high"]);
+const Body = z.object({
+  answers: z.array(z.number().int().min(1).max(5)).length(QUESTIONS.length),
+  partnerWants: z.object({ energy: Want, empathy: Want, planning: Want, openness: Want, expression: Want }),
+});
 
 export async function POST(req: Request) {
   const parsed = Body.safeParse(await req.json().catch(() => null));
@@ -16,10 +20,11 @@ export async function POST(req: Request) {
   const user = await ensureUser();
   if (!user.profile) return NextResponse.json({ error: "프로필을 먼저 작성해 주세요." }, { status: 400 });
   const traits = computeTraits(parsed.data.answers);
-  const analysis = await analyzePersonality(user.profile, traits);
+  const analysis = await analyzePersonality(user.profile, traits, parsed.data.partnerWants);
   mutate((db) => {
     const u = db.users[user.id];
     u.answers = parsed.data.answers;
+    u.partnerWants = parsed.data.partnerWants;
     u.analysis = analysis;
     if (u.status === "profiled" || u.status === "new") u.status = "analyzed";
   });

@@ -131,6 +131,7 @@ export function viewState(userId: string) {
       profile: user.profile ?? null,
       analysis: user.analysis ?? null,
       matchTraits: user.matchTraits ?? null,
+      partnerWants: user.partnerWants ?? null,
       prefs: user.prefs ?? null,
     },
     group,

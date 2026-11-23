@@ -42,10 +42,17 @@ export function makeDemoUser(i: number): User {
     id: newId("demo"),
     createdAt: Date.now(),
     isDemo: true,
-    status: "waiting",
+    status: "analyzed",
     profile,
     answers,
     analysis: ruleAnalysis(traits, profile.tags),
+    partnerWants: {
+      energy: pick(["low", "any", "high"] as const),
+      empathy: pick(["any", "high"] as const),
+      planning: pick(["low", "any", "any", "high"] as const),
+      openness: pick(["low", "any", "high"] as const),
+      expression: pick(["low", "any", "high"] as const),
+    },
     matchTraits: {
       hair: pick([...HAIR]),
       tg: Math.random() < 0.12 ? null : Math.floor(Math.random() * 11),

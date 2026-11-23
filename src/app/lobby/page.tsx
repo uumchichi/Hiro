@@ -1,83 +1,93 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
-import { MemberCard } from "@/components/MemberCard";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import { fmtClock, useHiro, useTick } from "@/components/useHiro";
+import { useSlots } from "@/components/useSlots";
 
-export default function LobbyPage() {
+/** 세션 대기실: 화면을 켜 두는 동안 '여기 있어요' 신호를 보내고, 그룹이 정해지면 대화방으로 이동합니다. */
+function Lobby() {
   const router = useRouter();
-  const { state, post, error, serverNow } = useHiro(2500);
+  const slotId = useSearchParams().get("slot");
+  const { state } = useHiro(3000);
+  const { data, serverNow } = useSlots(3000);
+  const [err, setErr] = useState<string | null>(null);
   useTick();
 
-  const status = state?.user.status;
-  const group = state?.group;
+  const slot = data?.slots.find((s) => s.id === slotId);
 
   useEffect(() => {
-    if (!state) return;
-    if (!state.user.analysis) router.replace(state.user.profile ? "/quiz" : "/start");
-    else if (group && group.status !== "ready") router.replace("/room");
-  }, [state, group, router]);
+    if (state?.user.status === "grouped") router.replace("/room");
+  }, [state, router]);
 
-  if (!state) return <p className="pt-10 text-center text-muted">불러오는 중…</p>;
+  useEffect(() => {
+    if (!slotId) return;
+    const ping = async () => {
+      const res = await fetch("/api/slots/checkin", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ slotId }),
+      });
+      setErr(res.ok ? null : ((await res.json().catch(() => ({}))).error ?? "입장하지 못했어요."));
+    };
+    ping();
+    const t = setInterval(ping, 20000);
+    return () => clearInterval(t);
+  }, [slotId]);
 
-  if (status === "analyzed") {
+  if (!data) return <p className="pt-10 text-center text-muted">불러오는 중…</p>;
+  if (!slot) {
     return (
       <div className="card mt-6 space-y-4 text-center">
-        <p className="text-4xl">🛋️</p>
-        <h1 className="text-xl font-bold">아직 라운지에 들어오지 않았어요</h1>
-        <p className="text-muted">입장하면 AI가 비슷한 테마의 사람들과 그룹을 만들어 드려요.</p>
-        {error && <p className="text-sm font-semibold text-brand">{error}</p>}
-        <button className="btn-primary" onClick={() => post("/api/queue", { join: true })}>라운지 입장</button>
+        <p className="text-muted">세션을 찾을 수 없어요.</p>
+        <Link href="/themes" className="btn-primary">테마 고르기</Link>
       </div>
     );
   }
 
-  if (status === "waiting") {
-    return (
-      <div className="card mt-6 space-y-5 text-center">
-        <div className="mx-auto h-16 w-16 animate-pulse rounded-full bg-brand-soft text-4xl leading-[4rem]">🧭</div>
-        <h1 className="text-xl font-bold">AI가 테마와 그룹을 고르고 있어요</h1>
-        <p className="text-muted">
-          라운지에 모인 분들의 성향과 태그를 보고 매칭해요.
-          <br />이 화면을 켜 두시면 그룹이 정해지는 대로 알려 드릴게요.
-        </p>
-        <button className="btn-ghost" onClick={() => post("/api/queue", { join: false })}>라운지 나가기</button>
-      </div>
-    );
-  }
-
-  if (!group) return null;
-  const startsIn = group.startedAt ? group.startedAt - serverNow() : null;
+  const left = slot.startsAt - serverNow();
+  const ended = slot.status === "cancelled" || (slot.status === "started" && slot.missed);
 
   return (
     <div className="space-y-5 pt-4">
-      <div className="card space-y-3">
-        <p className="text-sm font-semibold text-brand">그룹이 정해졌어요!</p>
-        <h1 className="text-2xl font-extrabold">
-          {group.theme.emoji} {group.theme.title}
-        </h1>
-        <p className="text-muted">{group.theme.description}</p>
-        <p className="rounded-2xl bg-brand-soft px-4 py-3 text-[15px]">🤖 {group.reason}</p>
-        <p className="text-sm text-muted">
-          {group.members.length}명이 한 명씩 돌아가며 {Math.round(group.roundSeconds / 60)}분씩, 총 {group.roundCount}번 1:1 음성 대화를 해요.
-        </p>
-        <div className="rounded-2xl border border-line p-4 text-center">
-          {startsIn !== null && startsIn > 0 ? (
-            <p className="text-lg font-bold">{fmtClock(startsIn)} 뒤 시작해요</p>
-          ) : (
-            <p className="font-semibold text-muted">운영자가 시작하면 바로 대화방으로 이동해요. 마이크를 준비해 주세요 🎧</p>
-          )}
+      <div className="relative overflow-hidden rounded-[2rem] bg-hiro px-6 py-10 text-center text-white">
+        <span className="orb -right-8 -top-8 h-32 w-32" aria-hidden />
+        <p className="relative text-4xl">{slot.theme.emoji}</p>
+        <h1 className="relative mt-2 text-2xl font-extrabold">{slot.theme.title}</h1>
+        <p className="relative mt-1 text-white/90">{slot.theme.description}</p>
+        {!ended && (
+          <p className="relative mt-6 text-5xl font-extrabold tabular-nums">
+            {slot.status === "open" && left > 0 ? fmtClock(left) : "그룹을 나누는 중…"}
+          </p>
+        )}
+      </div>
+
+      {ended ? (
+        <div className="card space-y-3 text-center">
+          <p className="font-bold">이번 세션은 함께하지 못했어요</p>
+          <p className="text-sm text-muted">{slot.note ?? "다음 세션에서 만나요."}</p>
+          <Link href="/themes" className="btn-primary">다른 테마 둘러보기</Link>
         </div>
-      </div>
-      <h2 className="font-bold">함께할 사람들</h2>
-      <div className="grid gap-3 sm:grid-cols-2">
-        {group.members.map((m) => (
-          <MemberCard key={m.id} m={m} highlight={m.id === state.user.id} />
-        ))}
-      </div>
-      <Link href="/me" className="btn-ghost">내 성향 보기</Link>
+      ) : (
+        <div className="card space-y-2 text-center">
+          <p className="font-semibold">
+            지금 대기실에 <b className="text-brand">{slot.present}명</b> · 신청 {slot.applicants}명
+          </p>
+          <p className="text-sm text-muted">
+            이 화면을 켜 둔 분들끼리 {data.config.min}~{data.config.max}명씩 그룹이 돼요. 이어폰을 준비해 주세요 🎧
+          </p>
+          {err && <p className="text-sm font-semibold text-brand">{err}</p>}
+        </div>
+      )}
     </div>
+  );
+}
+
+export default function LobbyPage() {
+  return (
+    <Suspense fallback={<p className="pt-10 text-center text-muted">불러오는 중…</p>}>
+      <Lobby />
+    </Suspense>
   );
 }

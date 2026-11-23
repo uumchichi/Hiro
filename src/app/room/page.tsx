@@ -17,7 +17,7 @@ export default function RoomPage() {
 
   const group = state?.group;
   useEffect(() => {
-    if (state && (!group || group.status === "ready")) router.replace("/lobby");
+    if (state && !group) router.replace("/themes");
   }, [state, group, router]);
   useEffect(() => {
     if (group?.myChoices) setPicks(group.myChoices);
@@ -58,10 +58,10 @@ export default function RoomPage() {
             <button
               className="btn-primary"
               onClick={async () => {
-                if (await post("/api/rejoin")) router.push("/me");
+                if (await post("/api/rejoin")) router.push("/themes");
               }}
             >
-              새 그룹 매칭 받기
+              다른 테마 둘러보기
             </button>
             <Link href="/me" className="btn-ghost">내 성향 보기</Link>
           </div>

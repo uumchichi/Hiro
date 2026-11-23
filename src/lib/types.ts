@@ -5,6 +5,10 @@ export type TraitKey = "energy" | "empathy" | "planning" | "openness" | "express
 
 export type TraitScores = Record<TraitKey, number>; // 0~100
 
+/** 원하는 상대 성향: 축마다 낮은 쪽 / 상관없음 / 높은 쪽 */
+export type Want = "low" | "any" | "high";
+export type PartnerWants = Record<TraitKey, Want>;
+
 export interface Profile {
   nickname: string;
   birthYear: number;
@@ -24,7 +28,7 @@ export interface Analysis {
   source: "ai" | "rule";
 }
 
-export type UserStatus = "new" | "profiled" | "analyzed" | "waiting" | "grouped";
+export type UserStatus = "new" | "profiled" | "analyzed" | "grouped";
 
 export interface User {
   id: string;
@@ -35,6 +39,7 @@ export interface User {
   matchTraits?: MatchTraits; // 내 만남 성향
   prefs?: MatchPrefs; // 원하는 상대
   answers?: number[]; // 성향 검사 응답 (1~5)
+  partnerWants?: PartnerWants; // 원하는 상대 성향
   analysis?: Analysis;
   groupId?: string;
 }
@@ -45,6 +50,7 @@ export interface Theme {
   emoji: string;
   description: string;
   tags: string[]; // 이 테마와 관련된 라이프스타일 태그
+  icebreakers?: string[]; // 이 테마의 1:1 대화 주제
 }
 
 export type GroupStatus = "ready" | "live" | "choosing" | "done";
@@ -75,18 +81,34 @@ export interface Group {
   submitted: string[]; // 선택을 제출한 userId
 }
 
-export interface MatchRun {
+/** 테마 세션: 정해진 시간에 열리고, 신청 후 대기실에 들어온 사람끼리 그룹이 됩니다. */
+export type SlotStatus = "open" | "forming" | "started" | "cancelled";
+
+export interface Slot {
   id: string;
   createdAt: number;
-  source: "ai" | "rule";
-  themes: Theme[];
+  theme: Theme;
+  startsAt: number;
+  status: SlotStatus;
+  applicants: string[];
+  checkins: Record<string, number>; // userId -> 대기실에 마지막으로 있었던 시각
   groupIds: string[];
-  unmatched: string[];
+  missed: string[]; // 신청했지만 그룹에 들어가지 못한 사람
+  roundSeconds?: number; // 테스트용으로 라운드 길이를 바꿀 때
+  note?: string;
+}
+
+export interface ThemeCatalog {
+  createdAt: number;
+  source: "ai" | "rule";
   note: string;
+  themes: Theme[];
 }
 
 export interface DB {
   users: Record<string, User>;
   groups: Record<string, Group>;
-  matchRuns: MatchRun[];
+  slots: Record<string, Slot>;
+  catalog: ThemeCatalog | null;
+  catalogCursor: number;
 }

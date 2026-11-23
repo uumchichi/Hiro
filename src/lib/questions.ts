@@ -30,6 +30,15 @@ export const QUESTIONS: Question[] = [
   { id: 12, trait: "expression", text: "감정은 혼자 정리한 뒤에 이야기하는 편이다.", reverse: true },
 ];
 
+/** 원하는 상대 성향 질문. [낮은 쪽, 높은 쪽] 선택지 문구 */
+export const PARTNER_QUESTIONS: { trait: TraitKey; text: string; low: string; high: string }[] = [
+  { trait: "energy", text: "대화할 때 어떤 상대가 편해요?", low: "차분하게 들어주는 사람", high: "대화를 이끌어 주는 사람" },
+  { trait: "empathy", text: "고민을 말했을 때 어떤 반응이 좋아요?", low: "담백하게 정리해 주는 사람", high: "마음을 먼저 알아주는 사람" },
+  { trait: "planning", text: "데이트는 어떤 스타일이 좋아요?", low: "그때그때 즉흥적인 사람", high: "미리 계획을 챙기는 사람" },
+  { trait: "openness", text: "함께할 때 어떤 사람이 좋아요?", low: "익숙한 걸 같이 즐기는 사람", high: "새로운 걸 같이 찾는 사람" },
+  { trait: "expression", text: "마음 표현은 어떤 사람이 좋아요?", low: "은은하게 표현하는 사람", high: "솔직하게 표현하는 사람" },
+];
+
 export const LIKERT = ["전혀 아니다", "아니다", "보통", "그렇다", "매우 그렇다"];
 
 /** 라이프스타일 태그. 테마 선정 AI가 이 태그들을 보고 그룹 테마를 만듭니다. */

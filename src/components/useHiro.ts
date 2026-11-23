@@ -79,10 +79,8 @@ export function nextPath(s: ViewState | null) {
     case "profiled":
       return "/quiz";
     case "analyzed":
-      return "/me";
-    case "waiting":
-      return "/lobby";
+      return "/themes";
     case "grouped":
-      return s.group && s.group.status !== "ready" ? "/room" : "/lobby";
+      return "/room";
   }
 }

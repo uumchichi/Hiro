@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { TraitBars } from "@/components/TraitBars";
 import { useHiro } from "@/components/useHiro";
+import { PARTNER_QUESTIONS } from "@/lib/questions";
 
 export default function MePage() {
   const router = useRouter();
-  const { state, post, error } = useHiro();
+  const { state, error } = useHiro();
 
   useEffect(() => {
     if (state && !state.user.profile) router.replace("/start");
@@ -18,12 +19,6 @@ export default function MePage() {
   const a = state?.user.analysis;
   if (!state || !a) return <p className="pt-10 text-center text-muted">불러오는 중…</p>;
 
-  async function join() {
-    const ok = await post("/api/queue", { join: true });
-    if (ok) router.push("/lobby");
-  }
-
-  const status = state.user.status;
   return (
     <div className="space-y-5 pt-4">
       <div className="card text-center">
@@ -60,16 +55,27 @@ export default function MePage() {
             <h2 className="mb-1 font-bold">잘 맞는 사람</h2>
             <p className="text-[15px]">{a.idealMatch}</p>
           </div>
+          {state.user.partnerWants && (
+            <div>
+              <h2 className="mb-2 font-bold">내가 원하는 상대</h2>
+              <ul className="flex flex-wrap gap-2">
+                {PARTNER_QUESTIONS.filter((q) => state.user.partnerWants![q.trait] !== "any").map((q) => (
+                  <li key={q.trait} className="chip">
+                    {state.user.partnerWants![q.trait] === "high" ? q.high : q.low}
+                  </li>
+                ))}
+                {PARTNER_QUESTIONS.every((q) => state.user.partnerWants![q.trait] === "any") && <li className="chip">누구든 좋아요</li>}
+              </ul>
+            </div>
+          )}
         </div>
       </div>
 
       {error && <p className="text-sm font-semibold text-brand">{error}</p>}
       <div className="flex flex-wrap gap-3">
-        {status === "analyzed" ? (
-          <button className="btn-primary" onClick={join}>라운지 입장하고 매칭 기다리기</button>
-        ) : (
-          <Link href="/lobby" className="btn-primary">라운지로 가기</Link>
-        )}
+        <Link href={state.user.status === "grouped" ? "/room" : "/themes"} className="btn-primary">
+          {state.user.status === "grouped" ? "대화방으로 가기" : "테마 둘러보기"}
+        </Link>
         <Link href="/quiz" className="btn-ghost">검사 다시 하기</Link>
         <Link href="/start" className="btn-ghost">프로필 수정</Link>
       </div>
