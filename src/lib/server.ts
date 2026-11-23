@@ -2,7 +2,7 @@
 import { cookies, headers } from "next/headers";
 import { AccessToken } from "livekit-server-sdk";
 import { mutate, newId, readDb } from "./store";
-import { mdpLabel, tgColor, tgLabel } from "./compat";
+import { mdpLabel, normalizePrefs, normalizeTraits, tgColor, tgLabel } from "./compat";
 import { currentPhase, partnerIn, roomName } from "./rotation";
 import type { Group, User } from "./types";
 
@@ -80,7 +80,7 @@ function publicMember(u: User | undefined) {
     hair: u.matchTraits?.hair ?? null,
     tg: u.matchTraits?.showTg ? tgLabel(u.matchTraits.tg) : null,
     tgColor: u.matchTraits?.showTg ? tgColor(u.matchTraits.tg) : null,
-    mdp: u.matchTraits ? mdpLabel(u.matchTraits) : null,
+    mdp: u.matchTraits ? mdpLabel(normalizeTraits(u.matchTraits)) : null,
   };
 }
 
@@ -130,9 +130,9 @@ export function viewState(userId: string) {
       status: user.status,
       profile: user.profile ?? null,
       analysis: user.analysis ?? null,
-      matchTraits: user.matchTraits ?? null,
+      matchTraits: user.matchTraits ? normalizeTraits(user.matchTraits) : null,
       partnerWants: user.partnerWants ?? null,
-      prefs: user.prefs ?? null,
+      prefs: user.prefs ? normalizePrefs(user.prefs) : null,
     },
     group,
     voice: { configured: livekitConfigured() },

@@ -78,42 +78,58 @@ export function ruleCatalog(): Theme[] {
  * 그룹 안의 모든 쌍이 서로의 조건(머리 길이·깁텍·문담피)에 맞도록 합니다.
  */
 export function balancedPack(list: User[]): { chunks: User[][]; leftovers: User[] } {
-  if (list.length < GROUP_MIN) return { chunks: [], leftovers: list };
-  const n = Math.ceil(list.length / GROUP_MAX);
-  const target = Math.max(GROUP_MIN, Math.ceil(list.length / n));
-  if (n === 1) {
-    // 한 그룹이면 조건이 맞는 최대 묶음만 찾으면 됩니다.
-    const { chunks, leftovers } = packCompatible(orderByConstraint(list), GROUP_MIN, GROUP_MAX);
-    return { chunks: chunks.slice(0, 1), leftovers: [...leftovers, ...chunks.slice(1).flat()] };
-  }
+  // 조건이 맞는 사람이 (최소 인원 - 1)명도 안 되는 사람은 이번 세션에 넣을 수 없어요.
+  const hopeless = list.filter((u) => list.filter((o) => o !== u && compatible(u, o)).length < GROUP_MIN - 1);
+  const pool = list.filter((u) => !hopeless.includes(u));
+  if (pool.length < GROUP_MIN) return { chunks: [], leftovers: list };
+
+  const n = Math.ceil(pool.length / GROUP_MAX);
+  const target = Math.max(GROUP_MIN, Math.ceil(pool.length / n));
   // 조건이 까다로운 사람부터, 서로 원하는 성향이 잘 맞는 그룹에 배정합니다.
-  const order = orderByConstraint(list);
-  const chunks: User[][] = order.slice(0, n).map((u) => [u]);
-  const rest: User[] = [];
+  const order = orderByConstraint(pool);
+  let chunks: User[][] = order.slice(0, n).map((u) => [u]);
+  let rest: User[] = [];
   for (const u of order.slice(n)) {
-    let best: User[] | null = null;
-    let bestScore = -1;
-    for (const c of chunks) {
-      if (c.length >= target || !c.every((m) => compatible(m, u))) continue;
-      const score = c.reduce((sum, m) => sum + pairScore(m, u), 0) / c.length;
-      if (score > bestScore) {
-        best = c;
-        bestScore = score;
-      }
-    }
+    const best = bestHome(chunks, u, target);
     if (best) best.push(u);
     else rest.push(u);
   }
-  // 남은 사람은 자리가 있고 조건이 맞는 그룹에 넣어 봅니다.
+
+  // 인원이 모자란 그룹은 풀어서 남은 사람과 함께 다시 배치합니다.
+  rest = [...rest, ...chunks.filter((c) => c.length < GROUP_MIN).flat()];
+  chunks = chunks.filter((c) => c.length >= GROUP_MIN);
+  const again: User[] = [];
+  for (const u of orderByConstraint(rest)) {
+    const best = bestHome(chunks, u, GROUP_MAX);
+    if (best) best.push(u);
+    else again.push(u);
+  }
+  // 그래도 남은 사람들끼리 새 그룹을 만들 수 있으면 만듭니다.
+  const extra = packCompatible(orderByConstraint(again), GROUP_MIN, GROUP_MAX);
+  const all = [...chunks, ...extra.chunks];
+  // 마지막으로, 남은 사람을 자리가 남은 그룹에 한 번 더 넣어 봅니다.
   const leftovers: User[] = [];
-  for (const u of rest) {
-    const home = chunks.find((c) => c.length < GROUP_MAX && c.every((m) => compatible(m, u)));
-    if (home) home.push(u);
+  for (const u of extra.leftovers) {
+    const best = bestHome(all, u, GROUP_MAX);
+    if (best) best.push(u);
     else leftovers.push(u);
   }
-  const ok = chunks.filter((c) => c.length >= GROUP_MIN);
-  leftovers.push(...chunks.filter((c) => c.length < GROUP_MIN).flat());
-  return { chunks: ok, leftovers };
+  return { chunks: all, leftovers: [...hopeless, ...leftovers] };
+}
+
+/** 자리가 있고 모두와 조건이 맞는 그룹 중, 원하는 성향이 가장 잘 맞는 그룹 */
+function bestHome(chunks: User[][], u: User, cap: number) {
+  let best: User[] | null = null;
+  let bestScore = -1;
+  for (const c of chunks) {
+    if (c.length >= cap || !c.every((m) => compatible(m, u))) continue;
+    const score = c.reduce((sum, m) => sum + pairScore(m, u), 0) / c.length;
+    if (score > bestScore) {
+      best = c;
+      bestScore = score;
+    }
+  }
+  return best;
 }
 
 /** 다른 사람과 조건이 안 맞는 경우가 많은 사람을 앞에 둡니다. */

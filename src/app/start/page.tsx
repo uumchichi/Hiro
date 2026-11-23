@@ -6,9 +6,9 @@ import { useHiro } from "@/components/useHiro";
 import { DEFAULT_PREFS, HAIR, tgColor, tgLabel, type Hair, type MatchPrefs, type MatchTraits } from "@/lib/compat";
 import { REGIONS, TAG_GROUPS } from "@/lib/questions";
 
-const DEFAULT_TRAITS: MatchTraits = { hair: "단머", tg: 5, showTg: false, tattoo: false, smoke: false, piercing: false };
+const DEFAULT_TRAITS: MatchTraits = { hair: "단머", tg: 5, showTg: false, smoke: "none", tattoo: "none", piercing: "none" };
 
-function Seg<T extends string | boolean>({ value, options, onChange }: { value: T; options: { v: T; label: string }[]; onChange: (v: T) => void }) {
+function Seg<T extends string>({ value, options, onChange }: { value: T; options: { v: T; label: string }[]; onChange: (v: T) => void }) {
   return (
     <div className="flex flex-wrap gap-2">
       {options.map((o) => (
@@ -50,7 +50,7 @@ export default function StartPage() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
-    const ok = await post("/api/profile", { nickname, birthYear: Number(birthYear), region, bio, tags, confirmWoman, matchTraits: mt, prefs: pf });
+    const ok = await post("/api/profile", { nickname, birthYear: Number(birthYear), region, bio, tags, confirmWoman, matchTraits: { hair: mt.hair, tg: mt.tg, showTg: mt.showTg }, prefs: { hair: pf.hair, tgMin: pf.tgMin, tgMax: pf.tgMax, platonic: pf.platonic } });
     setBusy(false);
     if (ok) router.push(state?.user.analysis ? "/me" : "/quiz");
   }
@@ -88,7 +88,7 @@ export default function StartPage() {
       <div className="card space-y-6">
         <div>
           <h2 className="text-lg font-bold">나의 만남 성향</h2>
-          <p className="text-sm text-muted">AI 매칭에는 항상 쓰여요. 깁텍은 기본적으로 <b>비공개</b>이고, 원하면 공개할 수 있어요.</p>
+          <p className="text-sm text-muted">문담피는 성향 검사에서 따로 물어볼게요. AI 매칭에는 항상 쓰여요. 깁텍은 기본적으로 <b>비공개</b>이고, 원하면 공개할 수 있어요.</p>
         </div>
         <div>
           <p className="label">머리 길이</p>
@@ -132,17 +132,6 @@ export default function StartPage() {
               <span className="block text-xs">공개하지 않아도 AI가 서로 맞는 사람끼리 매칭해요. 다른 사람에게는 보이지 않아요.</span>
             </span>
           </label>
-        </div>
-        <div>
-          <p className="label">문담피</p>
-          <div className="space-y-2">
-            {(["tattoo", "smoke", "piercing"] as const).map((k) => (
-              <div key={k} className="flex items-center justify-between gap-3">
-                <span className="text-[15px]">{{ tattoo: "문신", smoke: "담배", piercing: "피어싱" }[k]}</span>
-                <Seg value={mt[k]} options={[{ v: false, label: "없어요" }, { v: true, label: "있어요" }]} onChange={(v) => setMt({ ...mt, [k]: v })} />
-              </div>
-            ))}
-          </div>
         </div>
       </div>
 
@@ -195,22 +184,6 @@ export default function StartPage() {
               </label>
             </div>
           )}
-        </div>
-        <div>
-          <p className="label">문담피</p>
-          <div className="flex flex-wrap gap-2">
-            {(
-              [
-                ["noTattoo", "문신 없는 사람만"],
-                ["noSmoke", "비흡연자만"],
-                ["noPiercing", "피어싱 없는 사람만"],
-              ] as const
-            ).map(([k, label]) => (
-              <button type="button" key={k} aria-pressed={pf[k]} className={`chip ${pf[k] ? "chip-on" : ""}`} onClick={() => setPf({ ...pf, [k]: !pf[k] })}>
-                {label}
-              </button>
-            ))}
-          </div>
         </div>
       </div>
 

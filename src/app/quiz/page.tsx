@@ -5,6 +5,30 @@ import { useEffect, useState } from "react";
 import { useHiro } from "@/components/useHiro";
 import { LIKERT, PARTNER_QUESTIONS, QUESTIONS } from "@/lib/questions";
 import type { PartnerWants, Want } from "@/lib/types";
+import { DEFAULT_HABITS, DEFAULT_PREFS, PIERCING, SMOKE, TATTOO, type MatchPrefs, type MatchTraits } from "@/lib/compat";
+
+type Habits = Pick<MatchTraits, "smoke" | "tattoo" | "piercing">;
+type Allow = Pick<MatchPrefs, "smokeMax" | "tattooMax" | "piercingMax">;
+
+const HABIT_ROWS = [
+  { key: "smoke", maxKey: "smokeMax", title: "🚬 담배", list: SMOKE },
+  { key: "tattoo", maxKey: "tattooMax", title: "🖋️ 문신", list: TATTOO },
+  { key: "piercing", maxKey: "piercingMax", title: "💎 피어싱", list: PIERCING },
+] as const;
+
+function Choice({ label, on, onClick }: { label: string; on: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={on}
+      onClick={onClick}
+      className={`rounded-2xl border px-3 py-2.5 text-left text-sm leading-snug transition ${on ? "border-brand bg-brand text-brand-ink font-semibold" : "border-line hover:bg-brand-soft"}`}
+    >
+      {label}
+    </button>
+  );
+}
 
 const ANY_WANTS: PartnerWants = { energy: "any", empathy: "any", planning: "any", openness: "any", expression: "any" };
 
@@ -13,6 +37,8 @@ export default function QuizPage() {
   const { state, post, error } = useHiro();
   const [answers, setAnswers] = useState<(number | null)[]>(QUESTIONS.map(() => null));
   const [wants, setWants] = useState<PartnerWants>(ANY_WANTS);
+  const [habits, setHabits] = useState<Habits>(DEFAULT_HABITS);
+  const [allow, setAllow] = useState<Allow>({ smokeMax: DEFAULT_PREFS.smokeMax, tattooMax: DEFAULT_PREFS.tattooMax, piercingMax: DEFAULT_PREFS.piercingMax });
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -21,13 +47,17 @@ export default function QuizPage() {
 
   useEffect(() => {
     if (state?.user.partnerWants) setWants(state.user.partnerWants);
-  }, [state?.user.partnerWants]);
+    const t = state?.user.matchTraits;
+    if (t) setHabits({ smoke: t.smoke, tattoo: t.tattoo, piercing: t.piercing });
+    const p = state?.user.prefs;
+    if (p) setAllow({ smokeMax: p.smokeMax, tattooMax: p.tattooMax, piercingMax: p.piercingMax });
+  }, [state?.user.partnerWants, state?.user.matchTraits, state?.user.prefs]);
 
   const done = answers.filter((a) => a !== null).length;
 
   async function submit() {
     setBusy(true);
-    const ok = await post("/api/quiz", { answers, partnerWants: wants });
+    const ok = await post("/api/quiz", { answers, partnerWants: wants, habits, allow });
     setBusy(false);
     if (ok) router.push("/me");
   }
@@ -70,6 +100,36 @@ export default function QuizPage() {
           </li>
         ))}
       </ol>
+
+      <div className="pt-4">
+        <h2 className="text-xl font-extrabold">생활 습관 (문담피)</h2>
+        <p className="mt-1 text-muted">
+          내가 하는 것과 상대가 해도 괜찮은 건 다를 수 있어요. 둘 다 골라 주세요. ‘상대는 어디까지’는 <b>필수 조건</b>이라, 서로 괜찮은 사람끼리만 같은 그룹이 돼요.
+        </p>
+      </div>
+      <div className="space-y-4">
+        {HABIT_ROWS.map((row) => (
+          <div key={row.key} className="card space-y-4">
+            <p className="text-lg font-bold">{row.title}</p>
+            <div>
+              <p className="label">나는?</p>
+              <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label={`${row.title} 나는`}>
+                {row.list.map((o) => (
+                  <Choice key={o.v} label={o.me} on={habits[row.key] === o.v} onClick={() => setHabits({ ...habits, [row.key]: o.v })} />
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="label">상대는 어디까지 괜찮아요?</p>
+              <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label={`${row.title} 상대`}>
+                {row.list.map((o) => (
+                  <Choice key={o.v} label={o.allow} on={allow[row.maxKey] === o.v} onClick={() => setAllow({ ...allow, [row.maxKey]: o.v })} />
+                ))}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
 
       <div className="pt-4">
         <h2 className="text-xl font-extrabold">어떤 사람을 만나고 싶어요?</h2>

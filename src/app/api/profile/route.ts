@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { HAIR } from "@/lib/compat";
+import { DEFAULT_HABITS, DEFAULT_PREFS, HAIR, normalizePrefs, normalizeTraits } from "@/lib/compat";
 import { ALL_TAGS, REGIONS } from "@/lib/questions";
 import { ensureUser, viewState } from "@/lib/server";
 import { mutate } from "@/lib/store";
@@ -16,9 +16,6 @@ const Body = z.object({
     hair: z.enum(HAIR),
     tg: z.number().int().min(0).max(10).nullable(),
     showTg: z.boolean(),
-    tattoo: z.boolean(),
-    smoke: z.boolean(),
-    piercing: z.boolean(),
   }),
   prefs: z
     .object({
@@ -26,9 +23,6 @@ const Body = z.object({
       tgMin: z.number().int().min(0).max(10),
       tgMax: z.number().int().min(0).max(10),
       platonic: z.enum(["no", "ok", "only"]),
-      noTattoo: z.boolean(),
-      noSmoke: z.boolean(),
-      noPiercing: z.boolean(),
     })
     .refine((p) => p.tgMin <= p.tgMax),
 });
@@ -44,8 +38,10 @@ export async function POST(req: Request) {
   mutate((db) => {
     const u = db.users[user.id];
     u.profile = profile;
-    u.matchTraits = parsed.data.matchTraits;
-    u.prefs = parsed.data.prefs;
+    // 문담피는 성향 검사에서 받으므로 그대로 둡니다.
+    const habits = u.matchTraits ? normalizeTraits(u.matchTraits) : DEFAULT_HABITS;
+    u.matchTraits = { ...parsed.data.matchTraits, smoke: habits.smoke, tattoo: habits.tattoo, piercing: habits.piercing };
+    u.prefs = { ...(u.prefs ? normalizePrefs(u.prefs) : DEFAULT_PREFS), ...parsed.data.prefs };
     if (u.status === "new") u.status = "profiled";
   });
   return NextResponse.json(viewState(user.id));

@@ -4,13 +4,37 @@ import type { User } from "./types";
 export const HAIR = ["숏컷", "숏단", "단머", "중단", "긴머"] as const;
 export type Hair = (typeof HAIR)[number];
 
+// ── 문담피: 단계가 높을수록 '더 많이/크게' ──
+export const SMOKE = [
+  { v: "none", me: "안 피워요", allow: "비흡연자만", short: "비흡연" },
+  { v: "ecig", me: "전자담배만", allow: "전자담배까지 괜찮아요", short: "전자담배" },
+  { v: "cig", me: "연초 피워요", allow: "상관없어요", short: "연초" },
+] as const;
+export const TATTOO = [
+  { v: "none", me: "없어요", allow: "문신 없는 사람이 좋아요", short: "" },
+  { v: "small", me: "작은 문신 (레터링·포인트)", allow: "작은 문신까지 괜찮아요", short: "작은 문신" },
+  { v: "medium", me: "중간 크기 (팔·다리 등)", allow: "중간 크기까지 괜찮아요", short: "문신" },
+  { v: "large", me: "큰 문신 (이레즈미·전신 등)", allow: "상관없어요", short: "큰 문신" },
+] as const;
+export const PIERCING = [
+  { v: "none", me: "없어요", allow: "피어싱 없는 사람이 좋아요", short: "" },
+  { v: "ears", me: "귀만", allow: "귀 피어싱까지 괜찮아요", short: "귀 피어싱" },
+  { v: "face", me: "얼굴·바디 피어싱도 있어요", allow: "상관없어요", short: "피어싱" },
+] as const;
+
+export type Smoke = (typeof SMOKE)[number]["v"];
+export type Tattoo = (typeof TATTOO)[number]["v"];
+export type Piercing = (typeof PIERCING)[number]["v"];
+
+const rank = <T extends string>(list: readonly { v: T }[], v: T) => list.findIndex((x) => x.v === v);
+
 export interface MatchTraits {
   hair: Hair;
   tg: number | null; // 0 = 온텍, 10 = 온깁, null = 플라토닉
   showTg: boolean; // 다른 사람에게 깁텍을 공개할지 (기본 비공개). 매칭에는 공개 여부와 상관없이 쓰입니다.
-  tattoo: boolean;
-  smoke: boolean;
-  piercing: boolean;
+  smoke: Smoke;
+  tattoo: Tattoo;
+  piercing: Piercing;
 }
 
 export interface MatchPrefs {
@@ -18,12 +42,22 @@ export interface MatchPrefs {
   tgMin: number;
   tgMax: number;
   platonic: "no" | "ok" | "only"; // 플라토닉 상대: 원하지 않음 / 괜찮음 / 플라토닉만
-  noTattoo: boolean;
-  noSmoke: boolean;
-  noPiercing: boolean;
+  smokeMax: Smoke; // 상대가 여기까지면 괜찮음
+  tattooMax: Tattoo;
+  piercingMax: Piercing;
 }
 
-export const DEFAULT_PREFS: MatchPrefs = { hair: [], tgMin: 0, tgMax: 10, platonic: "ok", noTattoo: false, noSmoke: false, noPiercing: false };
+export const DEFAULT_PREFS: MatchPrefs = {
+  hair: [],
+  tgMin: 0,
+  tgMax: 10,
+  platonic: "ok",
+  smokeMax: "cig",
+  tattooMax: "large",
+  piercingMax: "face",
+};
+
+export const DEFAULT_HABITS: Pick<MatchTraits, "smoke" | "tattoo" | "piercing"> = { smoke: "none", tattoo: "none", piercing: "none" };
 
 export function tgLabel(v: number | null) {
   if (v === null) return "플라토닉";
@@ -35,22 +69,48 @@ export function tgLabel(v: number | null) {
 }
 
 export function mdpLabel(t: Pick<MatchTraits, "tattoo" | "smoke" | "piercing">) {
-  const has = [t.tattoo && "문신", t.smoke && "담배", t.piercing && "피어싱"].filter(Boolean);
-  return has.length ? `${has.join("·")} O` : "문담피 X";
+  const parts = [
+    t.smoke !== "none" && SMOKE[rank(SMOKE, t.smoke)]?.short,
+    TATTOO[rank(TATTOO, t.tattoo)]?.short,
+    PIERCING[rank(PIERCING, t.piercing)]?.short,
+  ].filter(Boolean);
+  return parts.length ? parts.join(" · ") : "문담피 X";
+}
+
+/** 예전 형식(true/false) 데이터를 새 단계로 바꿉니다. */
+export function normalizeTraits(t: MatchTraits): MatchTraits {
+  const legacy = t as unknown as Record<string, unknown>;
+  return {
+    ...t,
+    smoke: typeof legacy.smoke === "boolean" ? (legacy.smoke ? "cig" : "none") : t.smoke ?? "none",
+    tattoo: typeof legacy.tattoo === "boolean" ? (legacy.tattoo ? "medium" : "none") : t.tattoo ?? "none",
+    piercing: typeof legacy.piercing === "boolean" ? (legacy.piercing ? "ears" : "none") : t.piercing ?? "none",
+  };
+}
+
+export function normalizePrefs(p: MatchPrefs): MatchPrefs {
+  const legacy = p as unknown as Record<string, unknown>;
+  return {
+    ...DEFAULT_PREFS,
+    ...p,
+    smokeMax: p.smokeMax ?? (legacy.noSmoke ? "none" : "cig"),
+    tattooMax: p.tattooMax ?? (legacy.noTattoo ? "none" : "large"),
+    piercingMax: p.piercingMax ?? (legacy.noPiercing ? "none" : "face"),
+  };
 }
 
 /** b가 a의 조건에 맞는지 (한 방향) */
 export function accepts(a: User, b: User): boolean {
-  const p = a.prefs;
-  const t = b.matchTraits;
-  if (!p || !t) return true; // 정보가 없으면 제한하지 않음
+  if (!a.prefs || !b.matchTraits) return true; // 정보가 없으면 제한하지 않음
+  const p = normalizePrefs(a.prefs);
+  const t = normalizeTraits(b.matchTraits);
   if (p.hair.length && !p.hair.includes(t.hair)) return false;
   if (t.tg === null) {
     if (p.platonic === "no") return false;
   } else if (p.platonic === "only" || t.tg < p.tgMin || t.tg > p.tgMax) return false;
-  if (p.noTattoo && t.tattoo) return false;
-  if (p.noSmoke && t.smoke) return false;
-  if (p.noPiercing && t.piercing) return false;
+  if (rank(SMOKE, t.smoke) > rank(SMOKE, p.smokeMax)) return false;
+  if (rank(TATTOO, t.tattoo) > rank(TATTOO, p.tattooMax)) return false;
+  if (rank(PIERCING, t.piercing) > rank(PIERCING, p.piercingMax)) return false;
   return true;
 }
 
