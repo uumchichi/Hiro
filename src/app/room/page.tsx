@@ -157,11 +157,11 @@ export default function RoomPage() {
                 return (
                   <OrbPreview
                     {...people}
-                    note="음성 서버(LiveKit)가 아직 설정되지 않아 화면 흐름만 진행돼요. LiveKit 키를 넣으면 실제 음성 대화가 연결되고, 두 오브가 서로의 목소리에 맞춰 움직여요."
+                    note="음성 서버(LiveKit)가 아직 설정되지 않아 화면 흐름만 진행돼요. LiveKit 키를 넣으면 실제 음성 대화가 연결돼요."
                   />
                 );
               if (partner.id.startsWith("demo_"))
-                return <OrbPreview {...people} note="데모 참가자는 음성에 들어오지 않아요. 실제 사용자끼리 매칭되면 서로의 목소리에 맞춰 오브가 움직여요." />;
+                return <OrbPreview {...people} note="데모 참가자는 음성에 들어오지 않아요. 실제 사용자끼리 매칭되면 음성 대화가 연결돼요." />;
               return group.room ? <VoiceRoom room={group.room} {...people} /> : null;
             })()}
           </div>

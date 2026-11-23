@@ -38,7 +38,6 @@ export default function OrbPreview({ partnerName, partnerColor, myName, myColor,
         <VoiceOrb getLevels={() => meter.current?.levels() ?? []} color={myColor} size={130} label={myName} sublabel="나" muted={!on} />
       </div>
       <MicButton on={on} onToggle={toggle} />
-      {!on && <p className="text-center text-xs text-muted">마이크를 켜면 내 목소리에 맞춰 내 오브가 움직여요.</p>}
       {err && <p className="text-center text-sm font-semibold text-brand">{err}</p>}
       <p className="rounded-2xl bg-brand-soft px-4 py-3 text-sm">{note}</p>
     </div>
