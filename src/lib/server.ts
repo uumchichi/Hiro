@@ -20,9 +20,10 @@ export async function currentUserId(): Promise<string | null> {
 export async function ensureUser(): Promise<User> {
   const existing = await currentUserId();
   if (existing) return readDb().users[existing];
-  const user: User = { id: newId("u"), createdAt: Date.now(), isDemo: false, status: "new" };
-  mutate((db) => {
-    db.users[user.id] = user;
+  const user = mutate((db) => {
+    const u: User = { id: newId("u"), createdAt: Date.now(), isDemo: false, status: "new" };
+    db.users[u.id] = u;
+    return u;
   });
   const jar = await cookies();
   jar.set(COOKIE, user.id, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 30 });
@@ -70,6 +71,7 @@ export function publicMember(u: User | undefined) {
   if (!u) return null;
   return {
     id: u.id,
+    code: u.code ?? "",
     nickname: u.profile?.nickname ?? "참가자",
     age: u.profile ? new Date().getFullYear() - u.profile.birthYear + 1 : null,
     region: u.profile?.region ?? "",
@@ -124,6 +126,7 @@ export function viewState(userId: string) {
     now,
     user: {
       id: user.id,
+      code: user.code ?? "",
       status: user.status,
       profile: user.profile ?? null,
       analysis: user.analysis ?? null,

@@ -1,6 +1,9 @@
 import type { PublicMember } from "@/lib/server";
+import { ReportButton } from "./ReportButton";
+import { UserCode } from "./UserCode";
 
-export function MemberCard({ m, highlight, children }: { m: PublicMember; highlight?: boolean; children?: React.ReactNode }) {
+/** report에 신고 맥락(예: "report:g_abc")을 넘기면 신고 버튼이 보여요. */
+export function MemberCard({ m, highlight, children, report }: { m: PublicMember; highlight?: boolean; children?: React.ReactNode; report?: string }) {
   return (
     <div className={`rounded-2xl border p-4 ${highlight ? "border-brand bg-brand-soft" : "border-line bg-surface"}`}>
       <div className="flex items-center gap-3">
@@ -10,9 +13,10 @@ export function MemberCard({ m, highlight, children }: { m: PublicMember; highli
         >
           {m.emoji}
         </span>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="font-bold">
             {m.nickname}
+            <UserCode code={m.code} className="ml-1 align-middle" />
             <span className="ml-1.5 text-sm font-normal text-muted">
               {m.age ? `${m.age}세 · ` : ""}
               {m.region}
@@ -20,6 +24,7 @@ export function MemberCard({ m, highlight, children }: { m: PublicMember; highli
           </p>
           <p className="truncate text-sm text-muted">{m.typeName}</p>
         </div>
+        {report !== undefined && <ReportButton code={m.code} nickname={m.nickname} context={report} />}
       </div>
       {(m.hair || m.tg || m.mdp) && (
         <div className="mt-3 flex flex-wrap gap-1.5 text-xs font-semibold">

@@ -29,6 +29,7 @@ interface Overview {
     phase: { kind: string; round?: number; nextRound?: number; endsAt?: number };
     letters: number;
   }[];
+  reports: { id: string; at: number; target: string; reporter: string; reason: string; detail: string; context: string; status: string; targetReports: number }[];
   lobby: { id: string; nickname: string; demo: boolean; online: boolean; priority: number; waitedSec: number; interests: number }[];
   invites: {
     id: string;
@@ -126,6 +127,31 @@ export default function AdminPage() {
       )}
 
       {msg && <p className="rounded-2xl bg-brand-soft px-4 py-3 text-sm font-semibold">{msg}</p>}
+
+      {data && (
+        <section className="card space-y-3">
+          <h2 className="text-lg font-bold">🚩 신고 {data.reports.length}건</h2>
+          {data.reports.length === 0 && <p className="text-sm text-muted">접수된 신고가 없어요.</p>}
+          {data.reports.map((r) => (
+            <div key={r.id} className="rounded-2xl border border-line p-4 text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="font-bold">
+                  {r.target}
+                  {r.targetReports > 1 && <span className="ml-2 rounded-full bg-brand px-2 py-0.5 text-xs text-brand-ink">누적 {r.targetReports}건</span>}
+                </p>
+                <span className="text-xs text-muted">{new Date(r.at).toLocaleString("ko-KR")}</span>
+              </div>
+              <p className="mt-1">
+                <b>{r.reason}</b>
+                {r.detail && <span className="text-muted"> · {r.detail}</span>}
+              </p>
+              <p className="mt-1 text-xs text-muted">
+                신고자 {r.reporter} · {r.context || "맥락 없음"}
+              </p>
+            </div>
+          ))}
+        </section>
+      )}
 
       <section className="card space-y-4">
         <h2 className="text-lg font-bold">대기실 · AI 초대장</h2>

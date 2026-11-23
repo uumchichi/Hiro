@@ -106,7 +106,7 @@ export default function ReportPage() {
           <div key={l.index} className={`card space-y-3 ${l.owner ? "border-brand" : ""}`}>
             <p className="text-xs font-semibold text-muted">{l.owner ? "주인을 찾은 쪽지" : `익명의 쪽지 #${l.index + 1}`}</p>
             <p className="whitespace-pre-wrap text-[15px] leading-relaxed">“{l.text}”</p>
-            {l.owner && <MemberCard m={l.owner} highlight />}
+            {l.owner && <MemberCard m={l.owner} highlight report={`report:${r.id}`} />}
             {r.revealedIndex === null && (
               <button className="btn-ghost w-full text-sm" onClick={() => setConfirmIdx(l.index)}>
                 🔎 이 쪽지의 주인 찾기
@@ -133,7 +133,7 @@ export default function ReportPage() {
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           {r.people.map((p) => (
-            <MemberCard key={p.member.id} m={p.member}>
+            <MemberCard key={p.member.id} m={p.member} report={`report:${r.id}`}>
               <div className="mt-3 space-y-2 text-sm">
                 <p className={p.memo ? "whitespace-pre-wrap" : "text-muted"}>📝 {p.memo || "메모 없음"}</p>
                 {p.letter && <p className="whitespace-pre-wrap text-muted">💌 보낸 쪽지: {p.letter}</p>}

@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ReportButton } from "@/components/ReportButton";
 import { fmtRemain } from "@/components/time";
+import { UserCode } from "@/components/UserCode";
 import type { PublicMember } from "@/lib/server";
 
 interface ChatView {
@@ -92,11 +94,16 @@ export default function ChatPage() {
         <div className="flex items-center gap-2">
           <span className="grid h-10 w-10 place-items-center rounded-full bg-brand-soft text-xl">{chat.other.emoji}</span>
           <div>
-            <p className="font-bold">{chat.other.nickname}</p>
+            <p className="font-bold">
+              {chat.other.nickname} <UserCode code={chat.other.code} className="align-middle" />
+            </p>
             <p className="text-xs text-muted">서로의 쪽지 주인을 찾았어요 💞</p>
           </div>
         </div>
-        <span className="shrink-0 whitespace-nowrap rounded-full bg-brand-soft px-3 py-1 text-xs font-semibold text-brand">⏳ {fmtRemain(remain)}</span>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <span className="whitespace-nowrap rounded-full bg-brand-soft px-3 py-1 text-xs font-semibold text-brand">⏳ {fmtRemain(remain)}</span>
+          <ReportButton code={chat.other.code} nickname={chat.other.nickname} context={`chat:${chat.id}`} />
+        </div>
       </div>
 
       <details className="rounded-2xl border border-line bg-surface px-4 py-3 text-sm" open={chat.messages.length === 0}>
@@ -106,6 +113,7 @@ export default function ChatPage() {
           <li>전화번호, 카톡·SNS 아이디, 주소, 직장 같은 <b>개인 정보는 공유하지 말아 주세요</b>.</li>
           <li>개인 정보 공유로 생기는 일에 대해 히로 운영진은 책임지지 않아요.</li>
           <li>번호 교환은 <b>실제로 만나서</b> 해 주세요. 첫 만남은 사람이 많은 공공장소를 추천해요.</li>
+          <li>불편한 일이 있으면 오른쪽 위 <b>🚩 신고</b>를 눌러 주세요. 상대의 ID(#{chat.other.code})로 접수돼요.</li>
         </ul>
       </details>
 

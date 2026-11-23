@@ -35,6 +35,7 @@ export interface User {
   createdAt: number;
   isDemo: boolean;
   status: UserStatus;
+  code?: string; // 공개 ID: 숫자+영어 대문자 5글자 (예: K7M2Q). 신고할 때 씁니다.
   profile?: Profile;
   matchTraits?: MatchTraits; // 내 만남 성향
   prefs?: MatchPrefs; // 원하는 상대
@@ -158,6 +159,19 @@ export interface Chat {
   messages: ChatMessage[];
 }
 
+/** 사용자 신고 (공개 ID로 접수) */
+export interface UserReport {
+  id: string;
+  at: number;
+  reporterId: string;
+  targetCode: string;
+  targetId: string | null;
+  reason: string;
+  detail: string;
+  context: string; // 예: "chat:chat_abc", "report:g_abc"
+  status: "new" | "reviewed";
+}
+
 export interface DB {
   users: Record<string, User>;
   groups: Record<string, Group>;
@@ -167,4 +181,5 @@ export interface DB {
   lobby: Record<string, LobbyEntry>;
   invites: Record<string, Invite>;
   chats: Record<string, Chat>;
+  reports: UserReport[];
 }

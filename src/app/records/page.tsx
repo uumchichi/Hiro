@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { fmtRemain } from "@/components/time";
 import type { PublicMember } from "@/lib/server";
 
 interface Records {
@@ -29,21 +28,10 @@ export default function RecordsPage() {
     <div className="space-y-6 pt-4">
       <h1 className="text-2xl font-extrabold">내 기록</h1>
 
-      <section className="space-y-3">
-        <h2 className="font-bold">💞 채팅방</h2>
-        {r.chats.length === 0 && <p className="text-sm text-muted">열려 있는 채팅방이 없어요. 서로의 쪽지 주인을 찾으면 24시간 채팅방이 열려요.</p>}
-        {r.chats.map((c) => (
-          <Link key={c.id} href={`/chat/${c.id}`} className="card flex items-center justify-between gap-3 border-brand">
-            <div className="min-w-0">
-              <p className="font-bold">
-                {c.other.emoji} {c.other.nickname}
-              </p>
-              <p className="truncate text-sm text-muted">{c.last ? `${c.last.mine ? "나: " : ""}${c.last.text}` : "아직 대화가 없어요"}</p>
-            </div>
-            <span className="shrink-0 rounded-full bg-brand-soft px-3 py-1 text-xs font-semibold text-brand">⏳ {fmtRemain(c.expiresAt - r.now)}</span>
-          </Link>
-        ))}
-      </section>
+      <Link href="/chats" className="card flex items-center justify-between gap-3">
+        <span className="font-bold">💞 채팅방</span>
+        <span className="text-sm text-muted">{r.chats.length ? `${r.chats.length}개 열려 있어요 →` : "열린 채팅방 없음 →"}</span>
+      </Link>
 
       <section className="space-y-3">
         <h2 className="font-bold">📋 로테이션 리포트</h2>

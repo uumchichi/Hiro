@@ -16,7 +16,7 @@ export async function GET() {
   processLobby(now);
   const db = readDb();
   const users = Object.values(db.users);
-  const name = (id: string) => db.users[id]?.profile?.nickname ?? id;
+  const name = (id: string) => `${db.users[id]?.profile?.nickname ?? "참가자"} #${db.users[id]?.code ?? "?"}`;
   const groups = Object.values(db.groups)
     .sort((a, b) => b.createdAt - a.createdAt)
     .slice(0, 20)
@@ -55,6 +55,20 @@ export async function GET() {
     catalog: db.catalog ? { source: db.catalog.source, note: db.catalog.note, createdAt: db.catalog.createdAt, count: db.catalog.themes.length } : null,
     slots,
     groups,
+    reports: [...db.reports]
+      .sort((a, b) => b.at - a.at)
+      .slice(0, 50)
+      .map((r) => ({
+        id: r.id,
+        at: r.at,
+        target: r.targetId ? name(r.targetId) : `#${r.targetCode}`,
+        reporter: name(r.reporterId),
+        reason: r.reason,
+        detail: r.detail,
+        context: r.context,
+        status: r.status,
+        targetReports: db.reports.filter((x) => x.targetCode === r.targetCode).length,
+      })),
     lobby: Object.entries(db.lobby)
       .map(([id, e]) => ({
         id,

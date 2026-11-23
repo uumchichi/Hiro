@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
+import { currentUserId } from "@/lib/server";
+import { readDb } from "@/lib/store";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -9,7 +11,11 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#9b5cff" };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  // 열려 있는 채팅방 수 (메뉴 배지)
+  const uid = await currentUserId();
+  const now = Date.now();
+  const openChats = uid ? Object.values(readDb().chats).filter((c) => c.members.includes(uid) && c.expiresAt > now).length : 0;
   return (
     <html lang="ko">
       <head>
@@ -24,11 +30,17 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             <span className="grid h-8 w-8 place-items-center rounded-full bg-hiro text-white">H</span>
             히로
           </Link>
-          <nav className="flex gap-3 text-sm text-muted sm:gap-4">
-            <Link href="/me" className="hover:text-ink">내 성향</Link>
+          <nav className="flex items-center gap-2.5 text-[13px] text-muted sm:gap-4 sm:text-sm">
             <Link href="/lobby" className="hover:text-ink">대기실</Link>
             <Link href="/themes" className="hover:text-ink">이벤트</Link>
-            <Link href="/records" className="hover:text-ink">기록</Link>
+            <Link href="/chats" className="relative hover:text-ink">
+              채팅
+              {openChats > 0 && (
+                <span className="absolute -right-3 -top-2 grid h-4 min-w-4 place-items-center rounded-full bg-brand px-1 text-[10px] font-bold text-brand-ink">{openChats}</span>
+              )}
+            </Link>
+            <Link href="/records" className="pl-1 hover:text-ink">기록</Link>
+            <Link href="/me" className="hover:text-ink">나</Link>
           </nav>
         </header>
         <main className="mx-auto max-w-3xl px-4 pb-20 sm:px-6">{children}</main>

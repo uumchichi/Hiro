@@ -11,7 +11,7 @@ const DATA_FILE = path.join(DATA_DIR, "hiro-db.json");
 const g = globalThis as unknown as { __hiroDb?: DB };
 
 function empty(): DB {
-  return { users: {}, groups: {}, slots: {}, catalog: null, catalogCursor: 0, lobby: {}, invites: {}, chats: {} };
+  return { users: {}, groups: {}, slots: {}, catalog: null, catalogCursor: 0, lobby: {}, invites: {}, chats: {}, reports: [] };
 }
 
 function load(): DB {
@@ -24,6 +24,7 @@ function load(): DB {
   } catch (err) {
     console.error("[store] failed to read data file, starting empty", err);
   }
+  assignCodes(db); // 예전 데이터에도 공개 ID를 붙여요
   g.__hiroDb = db;
   return db;
 }
@@ -47,8 +48,36 @@ export function readDb(): DB {
 export function mutate<T>(fn: (db: DB) => T): T {
   const db = load();
   const result = fn(db);
+  assignCodes(db);
   persist(db);
   return result;
+}
+
+// ── 공개 ID: 숫자 + 영어 대문자 5글자. 헷갈리는 0/O, 1/I는 뺐어요. ──
+const CODE_CHARS = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+
+function randomCode(): string {
+  let s = "";
+  for (let i = 0; i < 5; i++) s += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
+  // 숫자와 영문이 섞이도록
+  return /[0-9]/.test(s) && /[A-Z]/.test(s) ? s : randomCode();
+}
+
+/** ID가 없는 사용자에게 겹치지 않는 ID를 줍니다 (새 사용자, 예전 데이터 모두). */
+function assignCodes(db: DB) {
+  let used: Set<string> | null = null;
+  for (const u of Object.values(db.users)) {
+    if (u.code) continue;
+    used ??= new Set(Object.values(db.users).map((x) => x.code).filter(Boolean) as string[]);
+    let c = randomCode();
+    while (used.has(c)) c = randomCode();
+    used.add(c);
+    u.code = c;
+  }
+}
+
+export function normalizeCode(input: string) {
+  return input.trim().replace(/^#/, "").toUpperCase();
 }
 
 export function resetDb() {
