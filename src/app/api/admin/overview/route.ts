@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { aiEnabled } from "@/lib/ai";
+import { BREAK_SECONDS } from "@/lib/groups";
 import { GROUP_MAX, GROUP_MIN } from "@/lib/heuristics";
 import { currentPhase } from "@/lib/rotation";
 import { isAdmin, livekitConfigured, syncGroupStatus } from "@/lib/server";
@@ -40,12 +41,15 @@ export async function GET() {
       theme: s.theme,
       startsAt: s.startsAt,
       status: s.status,
+      curated: Boolean(s.curated),
+      capacity: s.capacity ?? null,
+      roundSeconds: s.roundSeconds ?? null,
       applicants: s.applicants.map((id) => ({ id, nickname: name(id), demo: !!db.users[id]?.isDemo, present: isPresent(s, id, now) })),
       note: s.note ?? null,
     }));
   return NextResponse.json({
     now,
-    config: { ai: aiEnabled(), voice: livekitConfigured(), groupMin: GROUP_MIN, groupMax: GROUP_MAX },
+    config: { ai: aiEnabled(), voice: livekitConfigured(), groupMin: GROUP_MIN, groupMax: GROUP_MAX, breakSeconds: BREAK_SECONDS() },
     counts: {
       total: users.length,
       real: users.filter((u) => !u.isDemo).length,

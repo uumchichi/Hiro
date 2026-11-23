@@ -105,6 +105,8 @@ export interface Slot {
   missed: string[]; // 신청했지만 그룹에 들어가지 못한 사람
   roundSeconds?: number; // 테스트용으로 라운드 길이를 바꿀 때
   inviteOnly?: boolean; // AI 예약 초대로 확정된 비공개 세션
+  curated?: boolean; // 운영진이 기획한 이벤트
+  capacity?: number; // 운영진 이벤트 정원 (신청 인원 상한)
   note?: string;
 }
 

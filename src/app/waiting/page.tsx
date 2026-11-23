@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { fmtClock, useHiro, useTick } from "@/components/useHiro";
 import { useSlots } from "@/components/useSlots";
+import { estimateRange } from "@/lib/estimate";
 
 /** 세션 대기실: 화면을 켜 두는 동안 '여기 있어요' 신호를 보내고, 그룹이 정해지면 대화방으로 이동합니다. */
 function Lobby() {
@@ -77,6 +78,7 @@ function Lobby() {
           <p className="text-sm text-muted">
             이 화면을 켜 둔 분들끼리 {data.config.min}~{data.config.max}명씩 그룹이 돼요. 이어폰을 준비해 주세요 🎧
           </p>
+          <p className="text-xs text-muted">⏱️ 예상: {estimateRange(data.config.min, data.config.max, slot.roundSeconds, data.config.breakSeconds).text}</p>
           {err && <p className="text-sm font-semibold text-brand">{err}</p>}
         </div>
       )}

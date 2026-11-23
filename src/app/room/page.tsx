@@ -7,6 +7,7 @@ import { MemberCard } from "@/components/MemberCard";
 import { NotesPanel } from "@/components/NotesPanel";
 import { fmtClock, useHiro, useTick } from "@/components/useHiro";
 import { tgColor } from "@/lib/compat";
+import { durationMs, estimateExact, fmtClockTime } from "@/lib/estimate";
 
 const VoiceRoom = dynamic(() => import("@/components/VoiceRoom"), { ssr: false });
 const OrbPreview = dynamic(() => import("@/components/OrbPreview"), { ssr: false });
@@ -44,6 +45,14 @@ export default function RoomPage() {
         <p className="text-sm font-semibold text-brand">{group.theme.emoji} {group.theme.title}</p>
         <p className="mt-4 text-6xl font-extrabold tabular-nums">{fmtClock(left)}</p>
         <p className="mt-3 text-muted">곧 첫 번째 대화가 시작돼요. 조용한 곳에서 이어폰을 준비해 주세요.</p>
+        <div className="mt-4 rounded-2xl bg-bg px-4 py-3 text-sm">
+          <p className="font-semibold">⏱️ {estimateExact(group.members.length, group.roundSeconds, group.breakSeconds).text}</p>
+          {group.startedAt && (
+            <p className="mt-1 text-muted">
+              {fmtClockTime(group.startedAt + durationMs(group.members.length, group.roundSeconds, group.breakSeconds))}쯤 끝나요
+            </p>
+          )}
+        </div>
       </div>
     );
   }
@@ -58,8 +67,13 @@ export default function RoomPage() {
         <p className="text-sm font-semibold text-muted">
           {group.theme.emoji} {group.theme.title}
         </p>
-        <p className="text-sm font-semibold">
+        <p className="text-right text-sm font-semibold">
           라운드 {roundNo} / {group.roundCount}
+          {group.startedAt && (
+            <span className="block text-xs font-normal text-muted">
+              {fmtClockTime(group.startedAt + durationMs(group.members.length, group.roundSeconds, group.breakSeconds))}쯤 끝나요
+            </span>
+          )}
         </p>
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-line">

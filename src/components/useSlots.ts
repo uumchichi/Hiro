@@ -10,6 +10,9 @@ export interface SlotView {
   applicants: number;
   present: number;
   applied: boolean;
+  curated: boolean; // 운영진 기획 이벤트
+  capacity: number | null;
+  roundSeconds: number;
   canCheckIn: boolean;
   missed: boolean;
   note: string | null;
@@ -18,7 +21,7 @@ export interface SlotView {
 export interface SlotsResponse {
   now: number;
   slots: SlotView[];
-  config: { min: number; max: number; checkinMinutes: number };
+  config: { min: number; max: number; checkinMinutes: number; breakSeconds: number };
 }
 
 export function useSlots(pollMs = 5000) {

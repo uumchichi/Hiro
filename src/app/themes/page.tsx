@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useHiro, useTick } from "@/components/useHiro";
 import { fmtUntil, fmtWhen, useSlots, type SlotView } from "@/components/useSlots";
+import { estimateRange } from "@/lib/estimate";
 
 export default function ThemesPage() {
   const router = useRouter();
@@ -39,6 +40,41 @@ export default function ThemesPage() {
   const mine = data.slots.filter((s) => s.applied && (s.status === "open" || s.status === "forming"));
   const past = data.slots.filter((s) => s.applied && (s.status === "cancelled" || (s.status === "started" && s.missed)));
   const board = data.slots.filter((s) => s.status === "open");
+  const curated = board.filter((s) => s.curated);
+
+  const card = (s: SlotView) => {
+    const full = Boolean(s.capacity && s.applicants >= s.capacity && !s.applied);
+    const ratio = s.capacity ? Math.min(1, s.applicants / s.capacity) : Math.min(1, s.applicants / data.config.min);
+    const est = estimateRange(data.config.min, data.config.max, s.roundSeconds, data.config.breakSeconds);
+    return (
+      <div key={s.id} className={`card flex flex-col gap-3 ${s.curated ? "border-[var(--mid)]" : ""}`}>
+        {s.curated && <span className="self-start rounded-full bg-hiro px-2.5 py-0.5 text-xs font-bold text-white">✨ 운영진 기획</span>}
+        <div className="flex items-start gap-3">
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-brand-soft text-2xl">{s.theme.emoji}</span>
+          <div className="min-w-0">
+            <p className="font-bold leading-snug">{s.theme.title}</p>
+            <p className="text-sm text-muted">{s.theme.description}</p>
+          </div>
+        </div>
+        <p className="text-sm font-semibold">
+          🕘 {fmtWhen(s.startsAt, now)} <span className="font-normal text-muted">({fmtUntil(s.startsAt - now)})</span>
+        </p>
+        <p className="rounded-2xl bg-bg px-3 py-2 text-xs text-muted">⏱️ 예상: {est.text}</p>
+        <div>
+          <div className="h-2 overflow-hidden rounded-full bg-line">
+            <div className="h-full bg-hiro" style={{ width: `${ratio * 100}%` }} />
+          </div>
+          <p className="mt-1 text-xs text-muted">
+            {s.capacity ? `신청 ${s.applicants}/${s.capacity}명` : `신청 ${s.applicants}명`} ·{" "}
+            {full ? "정원이 다 찼어요" : s.applicants >= data.config.min ? "진행 가능 인원이 모였어요" : `${data.config.min}명 이상이면 진행돼요`}
+          </p>
+        </div>
+        <button className={s.applied ? "btn-ghost" : "btn-primary"} disabled={busy === s.id || full} onClick={() => apply(s, !s.applied)}>
+          {s.applied ? "신청 취소" : full ? "마감" : "신청하기"}
+        </button>
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-6 pt-4">
@@ -85,42 +121,16 @@ export default function ThemesPage() {
         </section>
       )}
 
+      {curated.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="font-bold">✨ 운영진 기획 이벤트</h2>
+          <div className="grid gap-3 sm:grid-cols-2">{curated.map(card)}</div>
+        </section>
+      )}
+
       <section className="space-y-3">
         <h2 className="font-bold">예정된 이벤트</h2>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {board.map((s) => {
-            const ratio = Math.min(1, s.applicants / data.config.min);
-            return (
-              <div key={s.id} className="card flex flex-col gap-3">
-                <div className="flex items-start gap-3">
-                  <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-brand-soft text-2xl">{s.theme.emoji}</span>
-                  <div className="min-w-0">
-                    <p className="font-bold leading-snug">{s.theme.title}</p>
-                    <p className="text-sm text-muted">{s.theme.description}</p>
-                  </div>
-                </div>
-                <p className="text-sm font-semibold">
-                  🕘 {fmtWhen(s.startsAt, now)} <span className="font-normal text-muted">({fmtUntil(s.startsAt - now)})</span>
-                </p>
-                <div>
-                  <div className="h-2 overflow-hidden rounded-full bg-line">
-                    <div className="h-full bg-hiro" style={{ width: `${ratio * 100}%` }} />
-                  </div>
-                  <p className="mt-1 text-xs text-muted">
-                    신청 {s.applicants}명 · {s.applicants >= data.config.min ? "진행 가능 인원이 모였어요" : `${data.config.min}명 이상이면 진행돼요`}
-                  </p>
-                </div>
-                <button
-                  className={s.applied ? "btn-ghost" : "btn-primary"}
-                  disabled={busy === s.id}
-                  onClick={() => apply(s, !s.applied)}
-                >
-                  {s.applied ? "신청 취소" : "신청하기"}
-                </button>
-              </div>
-            );
-          })}
-        </div>
+        <div className="grid gap-3 sm:grid-cols-2">{board.filter((s) => !s.curated).map(card)}</div>
       </section>
     </div>
   );

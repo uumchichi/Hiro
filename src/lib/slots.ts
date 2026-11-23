@@ -34,7 +34,7 @@ function newSlot(theme: Theme, startsAt: number): Slot {
 /** 앞으로 열릴 세션이 UPCOMING개보다 적으면 채웁니다. */
 export function ensureSlots(now = Date.now()) {
   const db = readDb();
-  const open = Object.values(db.slots).filter((s) => s.status === "open" && s.startsAt > now && !s.inviteOnly);
+  const open = Object.values(db.slots).filter((s) => s.status === "open" && s.startsAt > now && !s.inviteOnly && !s.curated);
   if (open.length >= UPCOMING) return;
   mutate((db) => {
     const themes = catalogThemes();
@@ -75,6 +75,48 @@ export function createSlotIn(minutes: number, roundSeconds?: number, themeTitle?
   return slot;
 }
 
+/** 운영진이 기획한 이벤트를 특정 날짜·시간에 엽니다. */
+export function createCuratedEvent(input: {
+  title: string;
+  emoji: string;
+  description: string;
+  tags: string[];
+  icebreakers: string[];
+  startsAt: number;
+  roundSeconds: number;
+  capacity: number;
+}) {
+  const theme: Theme = {
+    id: newId("evt"),
+    title: input.title,
+    emoji: input.emoji || "✨",
+    description: input.description,
+    tags: input.tags,
+    icebreakers: input.icebreakers.length ? input.icebreakers : undefined,
+  };
+  const slot = newSlot(theme, input.startsAt);
+  slot.curated = true;
+  slot.capacity = input.capacity;
+  slot.roundSeconds = input.roundSeconds;
+  mutate((db) => {
+    db.slots[slot.id] = slot;
+  });
+  return slot;
+}
+
+/** 운영진 이벤트 취소: 시작 전인 이벤트만 */
+export function cancelEvent(slotId: string): string | null {
+  return mutate((db) => {
+    const s = db.slots[slotId];
+    if (!s) return "이벤트가 없어요.";
+    if (s.status !== "open") return "이미 시작했거나 끝난 이벤트예요.";
+    s.status = "cancelled";
+    s.missed = [...s.applicants];
+    s.note = "운영진 사정으로 이벤트가 취소됐어요.";
+    return null;
+  });
+}
+
 /** 예약 초대가 확정되면 그 시간의 세션을 만듭니다. mutate() 안에서 호출하세요. */
 export function createConfirmedSlot(db: import("./types").DB, theme: Theme, startsAt: number, applicants: string[]) {
   const slot = newSlot(theme, startsAt);
@@ -93,7 +135,7 @@ export async function refreshCatalog() {
     db.catalogCursor = 0;
     // 아직 아무도 신청하지 않은 세션은 새 테마로 바꿔 다시 채웁니다.
     for (const s of Object.values(db.slots)) {
-      if (s.status === "open" && s.applicants.length === 0 && !s.inviteOnly) delete db.slots[s.id];
+      if (s.status === "open" && s.applicants.length === 0 && !s.inviteOnly && !s.curated) delete db.slots[s.id];
     }
   });
   ensureSlots();
@@ -105,6 +147,7 @@ export function setApplied(userId: string, slotId: string, on: boolean) {
     const s = db.slots[slotId];
     if (!s || s.status !== "open") return "이미 마감된 세션이에요.";
     if (s.inviteOnly) return "초대받은 분만 참여할 수 있는 세션이에요.";
+    if (on && s.capacity && !s.applicants.includes(userId) && s.applicants.length >= s.capacity) return "정원이 다 찼어요.";
     if (on && !s.applicants.includes(userId)) s.applicants.push(userId);
     if (!on) {
       s.applicants = s.applicants.filter((id) => id !== userId);

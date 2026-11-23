@@ -6,7 +6,7 @@
 // 마감·무산된 사람은 다음 초대에서 우선권을 받습니다.
 import { aiEnabled, suggestInvite } from "./ai";
 import { compatible } from "./compat";
-import { createGroup } from "./groups";
+import { BREAK_SECONDS, ROUND_SECONDS, createGroup } from "./groups";
 import { GROUP_MAX, GROUP_MIN, pairScore } from "./heuristics";
 import { upcomingCells } from "./schedule";
 import { catalogThemes, createConfirmedSlot } from "./slots";
@@ -419,7 +419,7 @@ export function lobbyView(userId: string, now = Date.now()) {
   const reservations = Object.values(db.slots)
     .filter((s) => s.inviteOnly && s.applicants.includes(userId) && (s.status === "open" || s.status === "forming"))
     .sort((a, b) => a.startsAt - b.startsAt)
-    .map((s) => ({ slotId: s.id, theme: { title: s.theme.title, emoji: s.theme.emoji }, startsAt: s.startsAt, people: s.applicants.length }));
+    .map((s) => ({ slotId: s.id, theme: { title: s.theme.title, emoji: s.theme.emoji }, startsAt: s.startsAt, people: s.applicants.length, roundSeconds: s.roundSeconds ?? ROUND_SECONDS() }));
   return {
     now,
     inLobby: Boolean(me && (me.lastSeen > 0 || db.users[userId]?.isDemo)),
@@ -428,7 +428,7 @@ export function lobbyView(userId: string, now = Date.now()) {
     note: me?.note ?? null,
     online: Object.keys(db.lobby).filter((id) => isOnline(db, id, now)).length,
     hasAvailability: Boolean(db.users[userId]?.availability?.length),
-    config: { min: GROUP_MIN, max: GROUP_MAX, inviteSeconds: INVITE_TTL_MS / 1000 },
+    config: { min: GROUP_MIN, max: GROUP_MAX, inviteSeconds: INVITE_TTL_MS / 1000, roundSeconds: ROUND_SECONDS(), breakSeconds: BREAK_SECONDS() },
     themes: catalogThemes().map((t) => ({ id: t.id, title: t.title, emoji: t.emoji, description: t.description })),
     invite: showNow ? view(nowInv) : null,
     scheduled: forMe.filter((i) => i.kind === "scheduled" && i.status === "open").map(view),

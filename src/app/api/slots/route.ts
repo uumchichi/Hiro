@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { BREAK_SECONDS, ROUND_SECONDS } from "@/lib/groups";
 import { GROUP_MAX, GROUP_MIN } from "@/lib/heuristics";
 import { ensureUser } from "@/lib/server";
 import { CHECKIN_OPEN_MS, canCheckIn, isPresent, processDueSlots } from "@/lib/slots";
@@ -23,9 +24,12 @@ export async function GET() {
       applicants: s.applicants.length,
       present: s.applicants.filter((id) => isPresent(s, id, now)).length,
       applied: s.applicants.includes(user.id),
+      curated: Boolean(s.curated),
+      capacity: s.capacity ?? null,
+      roundSeconds: s.roundSeconds ?? ROUND_SECONDS(),
       canCheckIn: canCheckIn(s, now),
       missed: s.missed.includes(user.id),
       note: s.applicants.includes(user.id) ? s.note ?? null : null,
     }));
-  return NextResponse.json({ now, slots, config: { min: GROUP_MIN, max: GROUP_MAX, checkinMinutes: CHECKIN_OPEN_MS / 60000 } });
+  return NextResponse.json({ now, slots, config: { min: GROUP_MIN, max: GROUP_MAX, checkinMinutes: CHECKIN_OPEN_MS / 60000, breakSeconds: BREAK_SECONDS() } });
 }

@@ -4,11 +4,12 @@ import { useCallback, useEffect, useState } from "react";
 import { fmtClock, useTick } from "@/components/useHiro";
 import { fmtUntil, fmtWhen } from "@/components/useSlots";
 import { fmtSlotTime } from "@/lib/schedule";
+import { EventForm } from "@/components/EventForm";
 import type { Theme } from "@/lib/types";
 
 interface Overview {
   now: number;
-  config: { ai: boolean; voice: boolean; groupMin: number; groupMax: number };
+  config: { ai: boolean; voice: boolean; groupMin: number; groupMax: number; breakSeconds: number };
   counts: { total: number; real: number; demo: number; grouped: number };
   catalog: { source: "ai" | "rule"; note: string; createdAt: number; count: number } | null;
   slots: {
@@ -16,6 +17,9 @@ interface Overview {
     theme: Theme;
     startsAt: number;
     status: string;
+    curated: boolean;
+    capacity: number | null;
+    roundSeconds: number | null;
     applicants: { id: string; nickname: string; demo: boolean; present: boolean }[];
     note: string | null;
   }[];
@@ -241,18 +245,34 @@ export default function AdminPage() {
         </p>
       </section>
 
+      {data && (
+        <EventForm
+          adminKey={key}
+          groupMin={data.config.groupMin}
+          groupMax={data.config.groupMax}
+          breakSeconds={data.config.breakSeconds}
+          onDone={(m) => {
+            setMsg(m);
+            load();
+          }}
+        />
+      )}
+
       <section className="space-y-3">
         <h2 className="text-lg font-bold">예정된 세션 {upcoming.length}개</h2>
         {upcoming.map((s) => (
           <div key={s.id} className="card space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h3 className="font-bold">
+                {s.curated && <span className="mr-1.5 rounded-full bg-hiro px-2 py-0.5 text-xs text-white">✨ 운영진</span>}
                 {s.theme.emoji} {s.theme.title}
               </h3>
               <span className="chip">{SLOT_STATUS[s.status] ?? s.status}</span>
             </div>
             <p className="text-sm text-muted">
-              {fmtWhen(s.startsAt, now)} ({fmtUntil(s.startsAt - now)}) · 신청 {s.applicants.length}명 · 대기실 {s.applicants.filter((a) => a.present).length}명
+              {fmtWhen(s.startsAt, now)} ({fmtUntil(s.startsAt - now)}) · 신청 {s.applicants.length}
+              {s.capacity ? `/${s.capacity}` : ""}명 · 대기실 {s.applicants.filter((a) => a.present).length}명
+              {s.roundSeconds ? ` · 라운드 ${s.roundSeconds < 60 ? `${s.roundSeconds}초` : `${Math.round(s.roundSeconds / 60)}분`}` : ""}
             </p>
             {s.applicants.length > 0 && (
               <p className="text-sm">
@@ -262,6 +282,17 @@ export default function AdminPage() {
             {s.status === "open" && (
               <button className="btn-ghost text-sm" disabled={!!busy} onClick={() => call("/api/admin/slot", { action: "startNow", slotId: s.id }, "now", "세션을 지금 시작했어요.")}>
                 지금 바로 시작
+              </button>
+            )}
+            {s.curated && s.status === "open" && (
+              <button
+                className="btn-ghost ml-2 text-sm"
+                disabled={!!busy}
+                onClick={() => {
+                  if (confirm("이 이벤트를 취소할까요? 신청한 분들에게 취소됐다고 보여요.")) call("/api/admin/event", { action: "cancel", slotId: s.id }, "cancel", "이벤트를 취소했어요.");
+                }}
+              >
+                이벤트 취소
               </button>
             )}
           </div>

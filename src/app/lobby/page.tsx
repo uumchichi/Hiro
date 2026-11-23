@@ -7,6 +7,7 @@ import { useHiro, useTick } from "@/components/useHiro";
 import { fmtUntil } from "@/components/useSlots";
 import type { LobbyView } from "@/lib/lobby";
 import { fmtSlotTime } from "@/lib/schedule";
+import { estimateExact, estimateRange } from "@/lib/estimate";
 
 /** 초대장이 오면 짧은 알림음 + 진동 + 탭 제목 */
 function notify() {
@@ -180,6 +181,9 @@ export default function LobbyPage() {
               <p className="mt-2 text-xs text-muted">
                 {s.invited}명 초대 · {s.accepted}명 수락 · 수락 마감 {fmtUntil(s.expiresAt - now)}
               </p>
+              <p className="mt-1 text-xs text-muted">
+                ⏱️ 예상: {estimateRange(view.config.min, Math.min(view.config.max, s.invited), view.config.roundSeconds, view.config.breakSeconds).text}
+              </p>
               {s.iAccepted ? (
                 <p className="mt-3 text-sm font-semibold">수락했어요! {view.config.min}명 이상 모이면 예약이 확정돼요.</p>
               ) : (
@@ -204,6 +208,7 @@ export default function LobbyPage() {
                     <p className="text-sm">
                       {r.theme.emoji} {r.theme.title} · {r.people}명
                     </p>
+                    <p className="text-xs text-muted">⏱️ {estimateExact(r.people, r.roundSeconds, view.config.breakSeconds).text}</p>
                   </div>
                   <Link href={`/waiting?slot=${r.slotId}`} className="btn-primary py-2 text-sm">
                     {r.startsAt - now <= 10 * 60_000 ? "입장하기" : fmtUntil(r.startsAt - now)}
@@ -261,6 +266,9 @@ export default function LobbyPage() {
                   </p>
                 </div>
               )}
+              <p className="rounded-2xl bg-bg px-3 py-2 text-center text-xs text-muted">
+                ⏱️ 예상: {estimateRange(view.config.min, Math.min(view.config.max, invite.invited), view.config.roundSeconds, view.config.breakSeconds).text}
+              </p>
               {invite.iAccepted ? (
                 <p className="text-center font-semibold">
                   {invite.status === "started"
