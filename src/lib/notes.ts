@@ -81,15 +81,6 @@ export function finishGroup(db: DB, g: Group) {
       }
     }
   }
-  // 데모: 실제 사용자에게 쪽지를 쓴 경우 가끔 직진도 보내요 (받는 쪽 화면을 시험해 볼 수 있게)
-  g.straights ??= {};
-  for (const id of demos) {
-    const realTo = Object.keys(g.letters[id] ?? {}).find((to) => !db.users[to]?.isDemo);
-    if (realTo && Math.random() < 0.4) {
-      const now = Date.now();
-      g.straights[id] = { to: realTo, message: "쪽지로는 부족해서 직진해요! 이야기 더 나눠요 :)", at: now, expiresAt: now + STRAIGHT_TTL_MS, status: "pending", paid: "free" };
-    }
-  }
   for (const id of demos) {
     const senders = Object.keys(g.letters).filter((from) => g.letters[from]?.[id]);
     if (!senders.length || Math.random() < 0.2) continue;
@@ -97,6 +88,15 @@ export function finishGroup(db: DB, g: Group) {
     const real = senders.filter((s) => !db.users[s]?.isDemo);
     const pick = real.length && Math.random() < 0.75 ? real[0] : senders[Math.floor(Math.random() * senders.length)];
     g.reveals[id] = pick;
+  }
+  // 데모: 주인 찾기로 매칭되지 않았고 실제 사용자에게 쪽지를 썼다면 가끔 직진도 보내요 (받는 쪽 화면을 시험해 볼 수 있게)
+  g.straights ??= {};
+  for (const id of demos) {
+    const realTo = Object.keys(g.letters[id] ?? {}).find((to) => !db.users[to]?.isDemo);
+    // 실제 사용자의 쪽지 주인을 찾았다면 매칭될 수도 있으니 직진하지 않아요.
+    if (!realTo || g.reveals[id] === realTo || straightStage(db, g, id) !== "open" || Math.random() >= 0.4) continue;
+    const now = Date.now();
+    g.straights[id] = { to: realTo, message: "쪽지로는 부족해서 직진해요! 이야기 더 나눠요 :)", at: now, expiresAt: now + STRAIGHT_TTL_MS, status: "pending" };
   }
 }
 
@@ -147,13 +147,25 @@ function ensureChatIfMutual(db: DB, g: Group, userId: string): string | null {
 }
 
 // ───────────── 직진하기 ─────────────
-// 쪽지를 보낸 사람 중 1명에게, 로테이션마다 1번 채팅을 신청할 수 있어요.
+// 매칭에 실패한 뒤의 마지막 기회예요. 쪽지 보내기와 쪽지 주인 찾기가 끝났는데 서로 지목이 안 됐으면
+// (받은 쪽지가 없어서 주인 찾기를 못 하는 경우 포함) 쪽지를 보낸 사람 중 1명에게 채팅을 신청할 수 있어요.
 // 받은 사람이 수락하면 24시간 채팅방이 열려요. 거절·무응답은 보낸 사람에게 구분하지 않고 알려요.
 
 export const STRAIGHT_TTL_MS = 24 * 3600_000;
 export const STRAIGHT_MESSAGE_MAX = 100;
-/** 로테이션마다 무료로 쓸 수 있는 직진 횟수. 0으로 두면 직진권(나중에 결제로 충전)이 있어야 해요. */
-const STRAIGHT_FREE = () => Number(process.env.HIRO_STRAIGHT_FREE ?? 1);
+
+export type StraightStage = "rotation" | "need_reveal" | "matched" | "open" | "used";
+
+/** 지금 직진할 수 있는 단계인지 */
+function straightStage(db: DB, g: Group, userId: string): StraightStage {
+  if (g.status !== "done") return "rotation";
+  if (g.straights?.[userId]) return "used";
+  const revealed = g.reveals[userId];
+  if (revealed && g.reveals[revealed] === userId) return "matched";
+  const received = Object.keys(g.letters).some((from) => g.letters[from]?.[userId]);
+  if (received && !revealed) return "need_reveal";
+  return "open";
+}
 
 function straightCandidates(db: DB, g: Group, userId: string) {
   return Object.keys(g.letters[userId] ?? {}).filter((to) => !findChat(db, g.id, userId, to));
@@ -163,18 +175,14 @@ export function sendStraight(userId: string, groupId: string, to: string, messag
   return mutate((db) => {
     const g = db.groups[groupId];
     if (!g || !g.memberIds.includes(userId)) return "참여한 그룹이 아니에요.";
-    if (g.status !== "done") return "로테이션이 끝난 뒤에 할 수 있어요.";
+    const stage = straightStage(db, g, userId);
+    if (stage === "rotation") return "로테이션이 끝난 뒤에 할 수 있어요.";
+    if (stage === "used") return "이번 로테이션의 직진은 이미 사용했어요.";
+    if (stage === "need_reveal") return "쪽지 주인 찾기를 먼저 해 주세요.";
+    if (stage === "matched") return "이미 매칭된 분이 있어요.";
     g.straights ??= {};
-    if (g.straights[userId]) return "이번 로테이션의 직진은 이미 사용했어요.";
     if (!g.letters[userId]?.[to]) return "쪽지를 보낸 분에게만 직진할 수 있어요.";
     if (findChat(db, g.id, userId, to)) return "이미 채팅방이 열려 있어요.";
-    const me = db.users[userId];
-    let paid: "free" | "ticket" = "free";
-    if (STRAIGHT_FREE() < 1) {
-      if (!me.straightTickets) return "직진권이 필요해요.";
-      me.straightTickets -= 1;
-      paid = "ticket";
-    }
     const now = Date.now();
     g.straights[userId] = {
       to,
@@ -182,7 +190,6 @@ export function sendStraight(userId: string, groupId: string, to: string, messag
       at: now,
       expiresAt: now + STRAIGHT_TTL_MS,
       status: "pending",
-      paid,
       demoReply: db.users[to]?.isDemo ? { at: now + 4_000 + Math.random() * 8_000, accept: Math.random() < 0.7 } : undefined,
     };
     return null;
@@ -282,9 +289,8 @@ export function reportView(userId: string, groupId: string, publicMember: (id: s
       return {
         // 보낸 사람에게는 거절과 만료를 구분하지 않아요
         sent: mine ? { to: publicMember(mine.to), message: mine.message, status: sentStatus, chatId: mine.chatId ?? null } : null,
-        candidates: done && !mine ? straightCandidates(db, g, userId).map((id) => publicMember(id)) : [],
-        free: STRAIGHT_FREE(),
-        tickets: db.users[userId]?.straightTickets ?? 0,
+        stage: straightStage(db, g, userId),
+        candidates: straightStage(db, g, userId) === "open" ? straightCandidates(db, g, userId).map((id) => publicMember(id)) : [],
         received: Object.entries(g.straights ?? {})
           .filter(([, st]) => st.to === userId)
           .map(([from, st]) => ({

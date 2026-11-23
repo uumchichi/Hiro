@@ -191,15 +191,23 @@ function wantsTheme(db: DB, userId: string, theme: Theme) {
 }
 
 /** 서로 모두 조건이 맞는 사람들을 고릅니다. 우선권·대기 시간이 긴 사람부터, 원하는 성향이 맞는 쪽으로. */
-function pickClique(db: DB, ids: string[], max: number): string[] {
+export function pickClique(db: DB, ids: string[], max: number): string[] {
   const prio = (id: string) => db.lobby[id]?.priority ?? 0;
   const since = (id: string) => db.lobby[id]?.joinedAt ?? db.users[id].createdAt;
   const order = [...ids].sort((a, b) => prio(b) - prio(a) || since(a) - since(b));
-  const picked: User[] = [];
-  for (const id of order) {
-    if (picked.length >= max) break;
-    const u = db.users[id];
-    if (picked.every((m) => compatible(m, u))) picked.push(u);
+  // 한 사람씩 차례로 '시작점'으로 삼아 서로 모두 맞는 묶음을 만들어 보고, 가장 큰 묶음을 고릅니다.
+  // (앞에서부터 한 번만 담으면, 먼저 담긴 사람 때문에 큰 묶음을 놓칠 수 있어요.)
+  // 크기가 같으면 우선권이 높거나 오래 기다린 사람에서 시작한 묶음을 고릅니다.
+  let picked: User[] = [];
+  for (let seed = 0; seed < order.length && picked.length < max; seed++) {
+    const group: User[] = [db.users[order[seed]]];
+    for (const id of order) {
+      if (group.length >= max) break;
+      const u = db.users[id];
+      if (group.includes(u)) continue;
+      if (group.every((m) => compatible(m, u))) group.push(u);
+    }
+    if (group.length > picked.length) picked = group;
   }
   // 우선권 없는 사람 중 가장 덜 맞는 사람을 더 잘 맞는 사람으로 바꿔 봅니다.
   const fit = (x: User, group: User[]) => group.filter((m) => m !== x).reduce((s, m) => s + pairScore(m, x), 0);

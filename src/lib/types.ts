@@ -35,7 +35,6 @@ export interface User {
   createdAt: number;
   isDemo: boolean;
   status: UserStatus;
-  straightTickets?: number; // 추가 직진권 (나중에 결제로 충전). 로테이션마다 1회는 무료
   code?: string; // 공개 ID: 숫자+영어 대문자 5글자 (예: K7M2Q). 신고할 때 씁니다.
   profile?: Profile;
   matchTraits?: MatchTraits; // 내 만남 성향
@@ -86,7 +85,7 @@ export interface Group {
   memos: Record<string, Record<string, string>>;
   // 쪽지의 주인 찾기: 한 사람당 단 한 번. reveals[찾은 사람] = 쪽지를 보낸 사람
   reveals: Record<string, string>;
-  // 직진하기: 쪽지를 보낸 사람 중 1명에게 채팅 신청. straights[보낸 사람]
+  // 직진하기: 매칭 실패 후, 쪽지를 보낸 사람 중 1명에게 채팅 신청. straights[보낸 사람]
   straights?: Record<string, Straight>;
   finishedAt?: number;
 }
@@ -154,7 +153,6 @@ export interface Straight {
   expiresAt: number; // 이때까지 응답이 없으면 만료
   status: StraightStatus;
   chatId?: string;
-  paid: "free" | "ticket"; // 무료 1회 / 직진권 사용 (나중에 결제 연결)
   demoReply?: { at: number; accept: boolean }; // 데모 참가자 자동 응답
 }
 

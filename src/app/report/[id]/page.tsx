@@ -19,9 +19,8 @@ interface Report {
   people: { member: PublicMember; letter: string; memo: string }[];
   straight: {
     sent: { to: PublicMember; message: string; status: "pending" | "accepted" | "missed"; chatId: string | null } | null;
+    stage: "rotation" | "need_reveal" | "matched" | "open" | "used";
     candidates: PublicMember[];
-    free: number;
-    tickets: number;
     received: {
       from: PublicMember;
       fromId: string;
@@ -183,15 +182,17 @@ export default function ReportPage() {
       </section>
 
       {/* 직진하기 */}
-      {r.done && (
+      {r.done && r.straight.stage !== "matched" && (
         <section className="card space-y-3">
           <div>
             <h2 className="text-lg font-bold">💘 직진하기</h2>
             <p className="text-sm text-muted">
-              쪽지 주인 찾기로 이어지지 않았어도, 쪽지를 보낸 분 중 <b>한 명</b>에게 채팅을 신청할 수 있어요. 로테이션마다 한 번, 상대가 수락하면 24시간 채팅방이 열려요. 직진은 <b>내가 누구인지 상대에게 보여요</b>.
+              쪽지 주인 찾기로 매칭되지 않았을 때의 마지막 기회예요. 쪽지를 보낸 분 중 <b>한 명</b>에게 채팅을 신청할 수 있고, 상대가 수락하면 24시간 채팅방이 열려요. 직진은 <b>내가 누구인지 상대에게 보여요</b>.
             </p>
           </div>
-          {r.straight.sent ? (
+          {r.straight.stage === "need_reveal" ? (
+            <p className="rounded-2xl bg-bg px-4 py-3 text-sm text-muted">🔒 먼저 위에서 쪽지의 주인을 찾아 보세요. 서로 지목하지 못했을 때 직진할 수 있어요.</p>
+          ) : r.straight.sent ? (
             <div className="rounded-2xl bg-brand-soft px-4 py-3 text-sm">
               <p>
                 <b>{r.straight.sent.to.nickname}</b>님에게 직진했어요.
