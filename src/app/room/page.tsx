@@ -6,8 +6,10 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { MemberCard } from "@/components/MemberCard";
 import { fmtClock, useHiro, useTick } from "@/components/useHiro";
+import { tgColor } from "@/lib/compat";
 
 const VoiceRoom = dynamic(() => import("@/components/VoiceRoom"), { ssr: false });
+const OrbPreview = dynamic(() => import("@/components/OrbPreview"), { ssr: false });
 
 export default function RoomPage() {
   const router = useRouter();
@@ -144,17 +146,24 @@ export default function RoomPage() {
               <p className={`text-2xl font-extrabold tabular-nums ${left < 30_000 ? "text-brand" : ""}`}>{fmtClock(left)}</p>
             </div>
             <MemberCard m={partner}>{partner.bio && <p className="mt-3 text-sm">“{partner.bio}”</p>}</MemberCard>
-            {state.voice.configured ? (
-              partner.id.startsWith("demo_") ? (
-                <p className="rounded-2xl bg-brand-soft px-4 py-3 text-sm">데모 참가자는 음성에 들어오지 않아요. 실제 사용자끼리 매칭되면 여기서 음성 대화가 연결돼요.</p>
-              ) : (
-                group.room && <VoiceRoom room={group.room} partnerName={partner.nickname} />
-              )
-            ) : (
-              <p className="rounded-2xl bg-brand-soft px-4 py-3 text-sm">
-                음성 서버(LiveKit)가 아직 설정되지 않아 화면 흐름만 진행돼요. <code>.env.local</code>에 LiveKit 키를 넣으면 실제 음성 대화가 연결돼요.
-              </p>
-            )}
+            {(() => {
+              const people = {
+                partnerName: partner.nickname,
+                partnerColor: partner.tgColor, // 상대가 공개했을 때만 색이 있어요
+                myName: state.user.profile?.nickname ?? "나",
+                myColor: state.user.matchTraits ? tgColor(state.user.matchTraits.tg) : null,
+              };
+              if (!state.voice.configured)
+                return (
+                  <OrbPreview
+                    {...people}
+                    note="음성 서버(LiveKit)가 아직 설정되지 않아 화면 흐름만 진행돼요. LiveKit 키를 넣으면 실제 음성 대화가 연결되고, 두 오브가 서로의 목소리에 맞춰 움직여요."
+                  />
+                );
+              if (partner.id.startsWith("demo_"))
+                return <OrbPreview {...people} note="데모 참가자는 음성에 들어오지 않아요. 실제 사용자끼리 매칭되면 서로의 목소리에 맞춰 오브가 움직여요." />;
+              return group.room ? <VoiceRoom room={group.room} {...people} /> : null;
+            })()}
           </div>
           <div className="card">
             <p className="mb-3 font-bold">🤖 AI 추천 대화 주제</p>

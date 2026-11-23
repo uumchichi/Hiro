@@ -6,33 +6,40 @@ import {
   RoomAudioRenderer,
   TrackToggle,
   useConnectionState,
-  useIsSpeaking,
+  useMultibandTrackVolume,
   useParticipants,
+  useTracks,
 } from "@livekit/components-react";
-import { ConnectionState, Track, type Participant } from "livekit-client";
-import { useEffect, useState } from "react";
+import { ConnectionState, Track } from "livekit-client";
+import { useEffect, useRef, useState } from "react";
+import { VoiceOrb } from "./VoiceOrb";
 
-function Speaker({ p }: { p: Participant }) {
-  const speaking = useIsSpeaking(p);
-  return (
-    <li className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm ${speaking ? "border-ok text-ok" : "border-line"}`}>
-      <span className={`h-2.5 w-2.5 rounded-full ${speaking ? "animate-pulse bg-ok" : "bg-line"}`} />
-      {p.isLocal ? "나" : p.name || "상대"}
-    </li>
-  );
+export interface OrbPeople {
+  partnerName: string;
+  partnerColor: string | null; // 상대가 히로 컬러를 공개했을 때만
+  myName: string;
+  myColor: string | null;
 }
 
-function Inner({ partnerName }: { partnerName: string }) {
+function Inner({ partnerName, partnerColor, myName, myColor }: OrbPeople) {
   const participants = useParticipants();
   const conn = useConnectionState();
   const partnerHere = participants.some((p) => !p.isLocal);
+  const mics = useTracks([Track.Source.Microphone]);
+  const mine = mics.find((t) => t.participant.isLocal);
+  const theirs = mics.find((t) => !t.participant.isLocal);
+  const myBands = useMultibandTrackVolume(mine, { bands: 6 });
+  const theirBands = useMultibandTrackVolume(theirs, { bands: 6 });
+  const myRef = useRef(myBands);
+  const theirRef = useRef(theirBands);
+  myRef.current = myBands;
+  theirRef.current = theirBands;
   return (
     <div className="space-y-3">
-      <ul className="flex flex-wrap gap-2">
-        {participants.map((p) => (
-          <Speaker key={p.identity} p={p} />
-        ))}
-      </ul>
+      <div className="flex items-end justify-center gap-6 py-2">
+        <VoiceOrb getLevels={() => theirRef.current} color={partnerColor} size={150} label={partnerName} sublabel={partnerHere ? "연결됨" : "기다리는 중"} />
+        <VoiceOrb getLevels={() => myRef.current} color={myColor} size={110} label={myName} sublabel="나" />
+      </div>
       <p className="text-sm text-muted">
         {conn !== ConnectionState.Connected
           ? "음성 연결 중…"
@@ -49,7 +56,7 @@ function Inner({ partnerName }: { partnerName: string }) {
 }
 
 /** 라운드별 1:1 음성방. room 이름이 바뀌면 새 토큰을 받아 다시 연결합니다. */
-export default function VoiceRoom({ room, partnerName }: { room: string; partnerName: string }) {
+export default function VoiceRoom({ room, ...people }: { room: string } & OrbPeople) {
   const [conn, setConn] = useState<{ token: string; url: string } | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -81,7 +88,7 @@ export default function VoiceRoom({ room, partnerName }: { room: string; partner
       video={false}
       onError={(e) => setErr(`음성 오류: ${e.message}`)}
     >
-      <Inner partnerName={partnerName} />
+      <Inner {...people} />
     </LiveKitRoom>
   );
 }
