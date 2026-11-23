@@ -1,4 +1,4 @@
-// 만남 성향(머리 길이, 깁텍, 문담피)과 원하는 상대 조건, 양방향 궁합 판정
+// 만남 성향(머리 길이, 히로 컬러(내부 이름: 깁텍), 문담피)과 원하는 상대 조건, 양방향 궁합 판정
 import type { User } from "./types";
 
 export const HAIR = ["숏컷", "숏단", "단머", "중단", "긴머"] as const;
@@ -31,7 +31,7 @@ const rank = <T extends string>(list: readonly { v: T }[], v: T) => list.findInd
 export interface MatchTraits {
   hair: Hair;
   tg: number | null; // 0 = 온텍, 10 = 온깁, null = 플라토닉
-  showTg: boolean; // 다른 사람에게 깁텍을 공개할지 (기본 비공개). 매칭에는 공개 여부와 상관없이 쓰입니다.
+  showTg: boolean; // 다른 사람에게 히로 컬러를 공개할지 (기본 비공개). 매칭에는 공개 여부와 상관없이 쓰입니다.
   smoke: Smoke;
   tattoo: Tattoo;
   piercing: Piercing;
@@ -59,13 +59,20 @@ export const DEFAULT_PREFS: MatchPrefs = {
 
 export const DEFAULT_HABITS: Pick<MatchTraits, "smoke" | "tattoo" | "piercing"> = { smoke: "none", tattoo: "none", piercing: "none" };
 
+/** 화면에 보이는 이름: 히로 컬러 */
 export function tgLabel(v: number | null) {
+  if (v === null) return "옐로";
+  if (v <= 0) return "딥 핑크";
+  if (v <= 3) return "핑크";
+  if (v <= 6) return "퍼플";
+  if (v <= 9) return "블루";
+  return "딥 블루";
+}
+
+/** AI에게만 넘기는 설명 (화면에는 쓰지 않음) */
+export function tgInternal(v: number | null) {
   if (v === null) return "플라토닉";
-  if (v <= 0) return "온텍";
-  if (v >= 10) return "온깁";
-  if (v <= 3) return `텍 쪽 (${v})`;
-  if (v >= 7) return `깁 쪽 (${v})`;
-  return `중간 (${v})`;
+  return `${v}/10 (0=온텍, 10=온깁)`;
 }
 
 export function mdpLabel(t: Pick<MatchTraits, "tattoo" | "smoke" | "piercing">) {

@@ -88,20 +88,21 @@ export default function StartPage() {
       <div className="card space-y-6">
         <div>
           <h2 className="text-lg font-bold">나의 만남 성향</h2>
-          <p className="text-sm text-muted">문담피는 성향 검사에서 따로 물어볼게요. AI 매칭에는 항상 쓰여요. 깁텍은 기본적으로 <b>비공개</b>이고, 원하면 공개할 수 있어요.</p>
+          <p className="text-sm text-muted">성향은 히로 컬러로 표현돼요. 히로 컬러는 기본 <b>비공개</b>이고, 공개한 사람만 배지 색으로 보여요. 공개하지 않아도 AI가 서로 맞는 사람끼리 매칭해요.</p>
         </div>
         <div>
           <p className="label">머리 길이</p>
           <Seg value={mt.hair} options={HAIR.map((h) => ({ v: h, label: h }))} onChange={(hair) => setMt({ ...mt, hair })} />
         </div>
         <div>
-          <p className="label">깁텍</p>
+          <p className="label">나의 히로 컬러</p>
+          <p className="mb-3 text-sm text-muted">핑크에 가까울수록 리드받는 쪽, 블루에 가까울수록 리드하는 쪽이에요.</p>
           <label className="mb-3 flex items-center gap-2 text-[15px]">
             <input type="checkbox" className="h-5 w-5 accent-[var(--brand)]" checked={mt.tg === null} onChange={(e) => setMt({ ...mt, tg: e.target.checked ? null : 5 })} />
-            플라토닉이에요
+            옐로예요 (플라토닉)
             {mt.tg === null && (
               <span className="ml-1 rounded-full px-2 py-0.5 text-xs font-bold text-ink" style={{ background: tgColor(null) }}>
-                플라토닉
+                옐로
               </span>
             )}
           </label>
@@ -116,19 +117,19 @@ export default function StartPage() {
                 onChange={(e) => setMt({ ...mt, tg: Number(e.target.value) })}
                 className="tg-range w-full"
                 style={{ ["--thumb" as string]: tgColor(mt.tg) }}
-                aria-label="깁텍"
+                aria-label="히로 컬러"
               />
               <div className="flex justify-between text-xs text-muted">
-                <span>0 온텍</span>
+                <span>딥 핑크</span>
                 <span className="font-bold" style={{ color: tgColor(mt.tg) }}>{tgLabel(mt.tg)}</span>
-                <span>온깁 10</span>
+                <span>딥 블루</span>
               </div>
             </div>
           )}
           <label className="mt-3 flex items-start gap-2 text-sm text-muted">
             <input type="checkbox" className="mt-0.5 h-4 w-4 accent-[var(--brand)]" checked={mt.showTg} onChange={(e) => setMt({ ...mt, showTg: e.target.checked })} />
             <span>
-              내 깁텍을 다른 사람에게 공개하기 (선택)
+              내 히로 컬러를 다른 사람에게 공개하기 (선택)
               <span className="block text-xs">공개하지 않아도 AI가 서로 맞는 사람끼리 매칭해요. 다른 사람에게는 보이지 않아요.</span>
             </span>
           </label>
@@ -154,13 +155,13 @@ export default function StartPage() {
           </div>
         </div>
         <div>
-          <p className="label">깁텍</p>
+          <p className="label">히로 컬러</p>
           <Seg
             value={pf.platonic}
             options={[
-              { v: "ok", label: "플라토닉도 괜찮아요" },
-              { v: "no", label: "플라토닉은 아니었으면" },
-              { v: "only", label: "플라토닉만" },
+              { v: "ok", label: "옐로도 괜찮아요" },
+              { v: "no", label: "옐로는 아니었으면" },
+              { v: "only", label: "옐로만" },
             ]}
             onChange={(platonic) => setPf({ ...pf, platonic })}
           />
@@ -170,7 +171,7 @@ export default function StartPage() {
                 <span className="mb-1 block text-muted">최소</span>
                 <select className="input py-2" value={pf.tgMin} onChange={(e) => setPf({ ...pf, tgMin: Number(e.target.value), tgMax: Math.max(pf.tgMax, Number(e.target.value)) })}>
                   {Array.from({ length: 11 }, (_, i) => (
-                    <option key={i} value={i}>{tgLabel(i)}</option>
+                    <option key={i} value={i}>{`${tgLabel(i)} · ${i}`}</option>
                   ))}
                 </select>
               </label>
@@ -178,7 +179,7 @@ export default function StartPage() {
                 <span className="mb-1 block text-muted">최대</span>
                 <select className="input py-2" value={pf.tgMax} onChange={(e) => setPf({ ...pf, tgMax: Number(e.target.value), tgMin: Math.min(pf.tgMin, Number(e.target.value)) })}>
                   {Array.from({ length: 11 }, (_, i) => (
-                    <option key={i} value={i}>{tgLabel(i)}</option>
+                    <option key={i} value={i}>{`${tgLabel(i)} · ${i}`}</option>
                   ))}
                 </select>
               </label>

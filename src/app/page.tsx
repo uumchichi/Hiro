@@ -12,10 +12,10 @@ const STEPS = [
 ];
 
 const LEGEND = [
-  { label: "플라토닉", color: SPECTRUM.platonic },
-  { label: "온텍", color: SPECTRUM.tek },
-  { label: "중간", color: SPECTRUM.mid },
-  { label: "온깁", color: SPECTRUM.gib },
+  { label: "옐로", color: SPECTRUM.platonic },
+  { label: "핑크", color: SPECTRUM.tek },
+  { label: "퍼플", color: SPECTRUM.mid },
+  { label: "블루", color: SPECTRUM.gib },
 ];
 
 export default function Home() {
@@ -47,8 +47,8 @@ export default function Home() {
 
       <section className="card space-y-4">
         <div>
-          <h2 className="text-lg font-bold">히로 스펙트럼</h2>
-          <p className="text-sm text-muted">깁텍 성향은 색으로 표현돼요. 깁텍은 기본 비공개이고, 공개한 사람만 배지 색으로 보여요. 공개하지 않아도 AI가 서로 맞는 사람끼리 매칭해요.</p>
+          <h2 className="text-lg font-bold">히로 컬러</h2>
+          <p className="text-sm text-muted">성향은 히로 컬러로 표현돼요. 히로 컬러는 기본 비공개이고, 공개한 사람만 배지 색으로 보여요. 공개하지 않아도 AI가 서로 맞는 사람끼리 매칭해요.</p>
         </div>
         <div className="flex h-3 overflow-hidden rounded-full">
           <div className="w-[14%]" style={{ background: SPECTRUM.platonic }} />
