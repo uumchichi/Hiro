@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { MicButton } from "./MicButton";
 import { VoiceOrb, createMicMeter } from "./VoiceOrb";
 import type { OrbPeople } from "./VoiceRoom";
 
@@ -34,13 +35,10 @@ export default function OrbPreview({ partnerName, partnerColor, myName, myColor,
     <div className="space-y-3">
       <div className="flex items-start justify-center gap-6 py-2">
         <VoiceOrb getLevels={() => []} color={partnerColor} size={130} label={partnerName} sublabel="상대" />
-        <VoiceOrb getLevels={() => meter.current?.levels() ?? []} color={myColor} size={130} label={myName} sublabel="나" />
+        <VoiceOrb getLevels={() => meter.current?.levels() ?? []} color={myColor} size={130} label={myName} sublabel="나" muted={!on} />
       </div>
-      <div className="flex flex-wrap items-center justify-center gap-2">
-        <button type="button" className={on ? "btn-ghost py-2 text-sm" : "btn-primary py-2 text-sm"} onClick={toggle}>
-          {on ? "마이크 미리 보기 끄기" : "🎙️ 내 마이크로 움직여 보기"}
-        </button>
-      </div>
+      <MicButton on={on} onToggle={toggle} />
+      {!on && <p className="text-center text-xs text-muted">마이크를 켜면 내 목소리에 맞춰 내 오브가 움직여요.</p>}
       {err && <p className="text-center text-sm font-semibold text-brand">{err}</p>}
       <p className="rounded-2xl bg-brand-soft px-4 py-3 text-sm">{note}</p>
     </div>

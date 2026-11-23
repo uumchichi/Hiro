@@ -4,14 +4,15 @@ import "@livekit/components-styles";
 import {
   LiveKitRoom,
   RoomAudioRenderer,
-  TrackToggle,
   useConnectionState,
+  useLocalParticipant,
   useMultibandTrackVolume,
   useParticipants,
   useTracks,
 } from "@livekit/components-react";
 import { ConnectionState, Track } from "livekit-client";
 import { useEffect, useRef, useState } from "react";
+import { MicButton } from "./MicButton";
 import { VoiceOrb } from "./VoiceOrb";
 
 export interface OrbPeople {
@@ -24,7 +25,19 @@ export interface OrbPeople {
 function Inner({ partnerName, partnerColor, myName, myColor }: OrbPeople) {
   const participants = useParticipants();
   const conn = useConnectionState();
-  const partnerHere = participants.some((p) => !p.isLocal);
+  const remote = participants.find((p) => !p.isLocal);
+  const partnerHere = Boolean(remote);
+  const partnerMuted = Boolean(remote && !remote.isMicrophoneEnabled);
+  const { localParticipant, isMicrophoneEnabled } = useLocalParticipant();
+  const [switching, setSwitching] = useState(false);
+  async function toggleMic() {
+    setSwitching(true);
+    try {
+      await localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled);
+    } finally {
+      setSwitching(false);
+    }
+  }
   const mics = useTracks([Track.Source.Microphone]);
   const mine = mics.find((t) => t.participant.isLocal);
   const theirs = mics.find((t) => !t.participant.isLocal);
@@ -37,19 +50,17 @@ function Inner({ partnerName, partnerColor, myName, myColor }: OrbPeople) {
   return (
     <div className="space-y-3">
       <div className="flex items-start justify-center gap-6 py-2">
-        <VoiceOrb getLevels={() => theirRef.current} color={partnerColor} size={130} label={partnerName} sublabel={partnerHere ? "연결됨" : "기다리는 중"} />
-        <VoiceOrb getLevels={() => myRef.current} color={myColor} size={130} label={myName} sublabel="나" />
+        <VoiceOrb getLevels={() => theirRef.current} color={partnerColor} size={130} label={partnerName} sublabel={partnerHere ? "연결됨" : "기다리는 중"} muted={partnerMuted} />
+        <VoiceOrb getLevels={() => myRef.current} color={myColor} size={130} label={myName} sublabel="나" muted={!isMicrophoneEnabled} />
       </div>
-      <p className="text-sm text-muted">
+      <MicButton on={isMicrophoneEnabled} onToggle={toggleMic} disabled={switching || conn !== ConnectionState.Connected} />
+      <p className="text-center text-sm text-muted">
         {conn !== ConnectionState.Connected
           ? "음성 연결 중…"
           : partnerHere
             ? `${partnerName}님과 연결됐어요. 편하게 이야기해 보세요!`
             : `${partnerName}님을 기다리는 중이에요…`}
       </p>
-      <TrackToggle source={Track.Source.Microphone} className="btn-ghost">
-        마이크
-      </TrackToggle>
       <RoomAudioRenderer />
     </div>
   );

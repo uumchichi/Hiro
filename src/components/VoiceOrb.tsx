@@ -14,18 +14,22 @@ export function VoiceOrb({
   size = 160,
   label,
   sublabel,
+  muted = false,
 }: {
   getLevels: () => number[];
   color: string | null;
   size?: number;
   label?: string;
   sublabel?: string;
+  muted?: boolean; // 마이크가 꺼져 있으면 흐리게, 소리에 반응하지 않음
 }) {
   const uid = useId().replace(/:/g, "");
   const pathRef = useRef<SVGPathElement>(null);
   const glowRef = useRef<SVGCircleElement>(null);
   const levelsRef = useRef(getLevels);
   levelsRef.current = getLevels;
+  const mutedRef = useRef(muted);
+  mutedRef.current = muted;
 
   useEffect(() => {
     const POINTS = 72;
@@ -37,7 +41,7 @@ export function VoiceOrb({
 
     const frame = (now: number) => {
       const t = (now - start) / 1000;
-      const raw = levelsRef.current() ?? [];
+      const raw = mutedRef.current ? [] : (levelsRef.current() ?? []);
       const bands = raw.length ? raw : [0];
       // 대역마다 부드럽게 따라가기 (올라갈 땐 빠르게, 내려갈 땐 천천히)
       for (let i = 0; i < bands.length; i++) {
@@ -91,7 +95,15 @@ export function VoiceOrb({
   const c = color;
   return (
     <div className="flex flex-col items-center gap-2">
-      <svg viewBox="0 0 100 100" width={size} height={size} className="overflow-visible" aria-hidden>
+      <div className="relative">
+      <svg
+        viewBox="0 0 100 100"
+        width={size}
+        height={size}
+        className="overflow-visible transition-[opacity,filter] duration-300"
+        style={muted ? { opacity: 0.4, filter: "grayscale(0.7)" } : undefined}
+        aria-hidden
+      >
         <defs>
           {c ? (
             <radialGradient id={`fill-${uid}`} cx="38%" cy="32%" r="75%">
@@ -118,10 +130,16 @@ export function VoiceOrb({
         <path ref={pathRef} fill={`url(#fill-${uid})`} />
         <ellipse cx="42" cy="38" rx="16" ry="11" fill={`url(#shine-${uid})`} />
       </svg>
+      {muted && (
+        <span className="absolute right-1 top-1 grid h-8 w-8 place-items-center rounded-full border border-line bg-surface text-sm shadow" title="마이크 꺼짐">
+          🔇
+        </span>
+      )}
+      </div>
       {label && (
         <div className="text-center leading-tight">
           <p className="font-bold">{label}</p>
-          {sublabel && <p className="text-xs text-muted">{sublabel}</p>}
+          {(sublabel || muted) && <p className="text-xs text-muted">{muted ? "마이크 꺼짐" : sublabel}</p>}
         </div>
       )}
     </div>
