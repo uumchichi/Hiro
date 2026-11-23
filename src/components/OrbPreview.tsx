@@ -32,9 +32,9 @@ export default function OrbPreview({ partnerName, partnerColor, myName, myColor,
 
   return (
     <div className="space-y-3">
-      <div className="flex items-end justify-center gap-6 py-2">
-        <VoiceOrb getLevels={() => []} color={partnerColor} size={150} label={partnerName} sublabel="상대" />
-        <VoiceOrb getLevels={() => meter.current?.levels() ?? []} color={myColor} size={110} label={myName} sublabel="나" />
+      <div className="flex items-start justify-center gap-6 py-2">
+        <VoiceOrb getLevels={() => []} color={partnerColor} size={130} label={partnerName} sublabel="상대" />
+        <VoiceOrb getLevels={() => meter.current?.levels() ?? []} color={myColor} size={130} label={myName} sublabel="나" />
       </div>
       <div className="flex flex-wrap items-center justify-center gap-2">
         <button type="button" className={on ? "btn-ghost py-2 text-sm" : "btn-primary py-2 text-sm"} onClick={toggle}>
