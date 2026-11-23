@@ -1,29 +1,37 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #fff8f5;
+  /* 히로 스펙트럼: 플라토닉 노랑 · 온텍 분홍 → 중간 보라 → 온깁 파랑 */
+  --platonic: #f7c325;
+  --tek: #ff4f9a;
+  --mid: #9b5cff;
+  --gib: #3b7bff;
+  --sky: #3cc8f0;
+  --grad: linear-gradient(120deg, var(--tek) 0%, var(--mid) 50%, var(--gib) 85%, var(--sky) 100%);
+
+  --bg: #faf8ff;
   --surface: #ffffff;
-  --ink: #2b1d22;
-  --muted: #7a6870;
-  --line: #f0dfe2;
-  --brand: #e4577a;
+  --ink: #241b3a;
+  --muted: #736a8a;
+  --line: #ebe5f7;
+  --brand: #8a4dff;
   --brand-ink: #ffffff;
-  --brand-soft: #fde7ec;
-  --accent: #7c5cff;
-  --ok: #1f9d6b;
+  --brand-soft: #f1eaff;
+  --accent: #3b7bff;
+  --ok: #17a673;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #17121a;
-    --surface: #221b25;
-    --ink: #f6eef2;
-    --muted: #b6a7b0;
-    --line: #3a2f3e;
-    --brand: #ff7a9a;
-    --brand-ink: #2a0f18;
-    --brand-soft: #3a2230;
-    --accent: #a594ff;
+    --bg: #120f1f;
+    --surface: #1c1830;
+    --ink: #f3efff;
+    --muted: #aaa2c4;
+    --line: #2f2949;
+    --brand: #b48cff;
+    --brand-ink: #ffffff;
+    --brand-soft: #2b2250;
+    --accent: #7aa6ff;
     --ok: #4fd6a0;
   }
 }
@@ -50,7 +58,7 @@ body {
 }
 
 @utility card {
-    @apply rounded-3xl border border-line bg-surface p-6 shadow-[0_1px_0_rgba(0,0,0,0.02)];
+    @apply rounded-3xl border border-line bg-surface p-6 shadow-[0_12px_32px_-18px_rgba(80,40,160,0.25)];
   }
 
 @utility btn {
@@ -58,7 +66,8 @@ body {
   }
 
 @utility btn-primary {
-    @apply btn bg-brand text-brand-ink hover:brightness-105;
+    @apply btn text-white shadow-[0_8px_24px_-8px_rgba(138,77,255,0.6)] hover:brightness-110;
+    background: var(--grad);
   }
 
 @utility btn-ghost {
@@ -80,3 +89,56 @@ body {
 @utility label {
     @apply mb-2 block text-sm font-semibold text-muted;
   }
+
+@utility bg-hiro {
+  background: var(--grad);
+}
+
+@utility text-hiro {
+  background: var(--grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* 참고 이미지 느낌의 둥근 그라디언트 오브 */
+@utility orb {
+  position: absolute;
+  border-radius: 9999px;
+  pointer-events: none;
+  background: radial-gradient(circle at 30% 28%, #ffffff 0%, var(--sky) 18%, var(--mid) 55%, var(--tek) 100%);
+  box-shadow: 0 20px 40px -12px rgba(80, 40, 160, 0.45);
+}
+
+@utility ring-orb {
+  position: absolute;
+  border-radius: 9999px;
+  pointer-events: none;
+  border: 18px solid transparent;
+  background: linear-gradient(var(--surface), var(--surface)) padding-box, var(--grad) border-box;
+  opacity: 0.9;
+}
+
+input[type="range"].tg-range {
+  appearance: none;
+  height: 10px;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, var(--tek), var(--mid), var(--gib));
+}
+input[type="range"].tg-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 9999px;
+  background: var(--thumb, #fff);
+  border: 4px solid #fff;
+  box-shadow: 0 2px 8px rgba(40, 20, 90, 0.35);
+}
+input[type="range"].tg-range::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 9999px;
+  background: var(--thumb, #fff);
+  border: 4px solid #fff;
+  box-shadow: 0 2px 8px rgba(40, 20, 90, 0.35);
+}

@@ -30,7 +30,7 @@ export default function QuizPage() {
         <h1 className="text-2xl font-extrabold">성향 검사</h1>
         <p className="mt-1 text-muted">정답은 없어요. 평소의 나에 가까운 쪽을 골라 주세요.</p>
         <div className="mt-4 h-2 overflow-hidden rounded-full bg-line">
-          <div className="h-full bg-brand transition-all" style={{ width: `${(done / QUESTIONS.length) * 100}%` }} />
+          <div className="h-full bg-hiro transition-all" style={{ width: `${(done / QUESTIONS.length) * 100}%` }} />
         </div>
         <p className="mt-1 text-right text-sm text-muted">{done} / {QUESTIONS.length}</p>
       </div>

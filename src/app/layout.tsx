@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description: "성향 분석과 AI 테마 매칭, 1:1 음성 로테이션으로 새로운 인연을 만나요.",
 };
 
-export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#e4577a" };
+export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#9b5cff" };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
@@ -21,7 +21,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body className="min-h-dvh antialiased">
         <header className="mx-auto flex max-w-3xl items-center justify-between px-4 py-4 sm:px-6">
           <Link href="/" className="flex items-center gap-2 text-lg font-extrabold tracking-tight">
-            <span className="grid h-8 w-8 place-items-center rounded-full bg-brand text-brand-ink">H</span>
+            <span className="grid h-8 w-8 place-items-center rounded-full bg-hiro text-white">H</span>
             히로
           </Link>
           <nav className="flex gap-4 text-sm text-muted">

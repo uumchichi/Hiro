@@ -121,7 +121,7 @@ export default function RoomPage() {
         </p>
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-line">
-        <div className="h-full bg-brand" style={{ width: `${((roundNo - (phase.kind === "talk" ? 1 : 0)) / group.roundCount) * 100}%` }} />
+        <div className="h-full bg-hiro" style={{ width: `${((roundNo - (phase.kind === "talk" ? 1 : 0)) / group.roundCount) * 100}%` }} />
       </div>
 
       {phase.kind === "break" ? (

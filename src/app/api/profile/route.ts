@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { HAIR } from "@/lib/compat";
 import { ALL_TAGS, REGIONS } from "@/lib/questions";
 import { ensureUser, viewState } from "@/lib/server";
 import { mutate } from "@/lib/store";
@@ -11,6 +12,25 @@ const Body = z.object({
   bio: z.string().trim().max(300),
   tags: z.array(z.string()).max(12),
   confirmWoman: z.literal(true),
+  matchTraits: z.object({
+    hair: z.enum(HAIR),
+    tg: z.number().int().min(0).max(10).nullable(),
+    showTg: z.boolean(),
+    tattoo: z.boolean(),
+    smoke: z.boolean(),
+    piercing: z.boolean(),
+  }),
+  prefs: z
+    .object({
+      hair: z.array(z.enum(HAIR)),
+      tgMin: z.number().int().min(0).max(10),
+      tgMax: z.number().int().min(0).max(10),
+      platonic: z.enum(["no", "ok", "only"]),
+      noTattoo: z.boolean(),
+      noSmoke: z.boolean(),
+      noPiercing: z.boolean(),
+    })
+    .refine((p) => p.tgMin <= p.tgMax),
 });
 
 export async function POST(req: Request) {
@@ -24,6 +44,8 @@ export async function POST(req: Request) {
   mutate((db) => {
     const u = db.users[user.id];
     u.profile = profile;
+    u.matchTraits = parsed.data.matchTraits;
+    u.prefs = parsed.data.prefs;
     if (u.status === "new") u.status = "profiled";
   });
   return NextResponse.json(viewState(user.id));

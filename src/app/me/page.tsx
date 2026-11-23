@@ -29,7 +29,7 @@ export default function MePage() {
       <div className="card text-center">
         <div className="text-5xl">{a.emoji}</div>
         <p className="mt-3 text-sm font-semibold text-muted">{state.user.profile?.nickname}님의 대화 성향</p>
-        <h1 className="mt-1 text-3xl font-extrabold text-brand">{a.typeName}</h1>
+        <h1 className="mt-1 text-hiro text-3xl font-extrabold">{a.typeName}</h1>
         <p className="mx-auto mt-3 max-w-lg text-[15px] leading-relaxed">{a.summary}</p>
         {a.source === "rule" && <p className="mt-3 text-xs text-muted">※ AI 키가 없어 기본 분석으로 보여 드려요.</p>}
       </div>

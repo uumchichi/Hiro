@@ -1,4 +1,5 @@
 // AI(Claude)를 쓸 수 없을 때(API 키 없음, 오류) 쓰는 규칙 기반 로직.
+import { packCompatible } from "./compat";
 import { QUESTIONS, TRAIT_LABELS } from "./questions";
 import type { Analysis, Theme, TraitKey, TraitScores, User } from "./types";
 
@@ -108,23 +109,19 @@ export function ruleGroups(users: User[], themes: Theme[]) {
   const groups: { themeId: string; memberIds: string[]; reason: string; icebreakers: string[] }[] = [];
   const split = (themeId: string, list: User[]): User[] => {
     const theme = themes.find((t) => t.id === themeId)!;
-    // 성향이 비슷한 사람끼리 이웃하도록 에너지 점수로 정렬
+    // 성향이 비슷한 사람끼리 이웃하도록 에너지 점수로 정렬한 뒤,
+    // 머리 길이·텍깁·문담피 조건이 모든 쌍에서 맞도록 묶습니다.
     list.sort((a, b) => (a.analysis?.traits.energy ?? 50) - (b.analysis?.traits.energy ?? 50));
-    let n = Math.ceil(list.length / GROUP_MAX);
-    if (list.length < n * GROUP_MIN) n = Math.floor(list.length / GROUP_MIN);
-    if (n === 0) return list;
-    const placed = list.slice(0, Math.min(list.length, n * GROUP_MAX));
-    const chunks: User[][] = Array.from({ length: n }, () => []);
-    placed.forEach((u, i) => chunks[i % n].push(u));
+    const { chunks, leftovers } = packCompatible(list, GROUP_MIN, GROUP_MAX);
     for (const c of chunks) {
       groups.push({
         themeId,
         memberIds: c.map((u) => u.id),
-        reason: `'${theme.title}' 테마와 취향이 맞는 분들이에요.`,
+        reason: `'${theme.title}' 테마와 취향이 맞고, 서로의 만남 조건도 맞는 분들이에요.`,
         icebreakers: defaultIcebreakers(theme),
       });
     }
-    return list.slice(placed.length); // 남은 사람
+    return leftovers;
   };
   // 테마 버킷을 먼저 나누고, 남는 사람은 믹스 테마로 보냅니다.
   const leftovers: User[] = [];

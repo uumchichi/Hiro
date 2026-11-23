@@ -1,4 +1,5 @@
 // 히로(Hiro) 도메인 타입
+import type { MatchPrefs, MatchTraits } from "./compat";
 
 export type TraitKey = "energy" | "empathy" | "planning" | "openness" | "expression";
 
@@ -31,6 +32,8 @@ export interface User {
   isDemo: boolean;
   status: UserStatus;
   profile?: Profile;
+  matchTraits?: MatchTraits; // 내 만남 성향
+  prefs?: MatchPrefs; // 원하는 상대
   answers?: number[]; // 성향 검사 응답 (1~5)
   analysis?: Analysis;
   groupId?: string;

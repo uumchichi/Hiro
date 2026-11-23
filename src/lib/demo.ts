@@ -1,4 +1,5 @@
 // 혼자서도 매칭·로테이션 흐름을 시험할 수 있도록 데모 참가자를 만듭니다.
+import { DEFAULT_PREFS, HAIR } from "./compat";
 import { computeTraits, ruleAnalysis } from "./heuristics";
 import { QUESTIONS, REGIONS, TAG_GROUPS } from "./questions";
 import { newId } from "./store";
@@ -45,5 +46,18 @@ export function makeDemoUser(i: number): User {
     profile,
     answers,
     analysis: ruleAnalysis(traits, profile.tags),
+    matchTraits: {
+      hair: pick([...HAIR]),
+      tg: Math.random() < 0.12 ? null : Math.floor(Math.random() * 11),
+      showTg: true,
+      tattoo: Math.random() < 0.2,
+      smoke: Math.random() < 0.15,
+      piercing: Math.random() < 0.3,
+    },
+    // 데모는 대부분 너그러운 조건, 일부만 까다로운 조건
+    prefs:
+      Math.random() < 0.7
+        ? { ...DEFAULT_PREFS }
+        : { ...DEFAULT_PREFS, noSmoke: true, tgMin: Math.random() < 0.5 ? 0 : 4, tgMax: Math.random() < 0.5 ? 6 : 10 },
   };
 }
