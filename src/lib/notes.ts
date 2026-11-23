@@ -81,6 +81,15 @@ export function finishGroup(db: DB, g: Group) {
       }
     }
   }
+  // 데모: 실제 사용자에게 쪽지를 쓴 경우 가끔 직진도 보내요 (받는 쪽 화면을 시험해 볼 수 있게)
+  g.straights ??= {};
+  for (const id of demos) {
+    const realTo = Object.keys(g.letters[id] ?? {}).find((to) => !db.users[to]?.isDemo);
+    if (realTo && Math.random() < 0.4) {
+      const now = Date.now();
+      g.straights[id] = { to: realTo, message: "쪽지로는 부족해서 직진해요! 이야기 더 나눠요 :)", at: now, expiresAt: now + STRAIGHT_TTL_MS, status: "pending", paid: "free" };
+    }
+  }
   for (const id of demos) {
     const senders = Object.keys(g.letters).filter((from) => g.letters[from]?.[id]);
     if (!senders.length || Math.random() < 0.2) continue;
@@ -118,19 +127,113 @@ function receivedOrder(g: Group, userId: string) {
   return senders.sort((a, b) => key(a) - key(b));
 }
 
-function ensureChatIfMutual(db: DB, g: Group, userId: string): string | null {
-  const other = g.reveals[userId];
-  if (!other || g.reveals[other] !== userId) return null;
-  const existing = Object.values(db.chats).find((c) => c.groupId === g.id && c.members.includes(userId) && c.members.includes(other));
+function findChat(db: DB, groupId: string, a: string, b: string) {
+  return Object.values(db.chats).find((c) => c.groupId === groupId && c.members.includes(a) && c.members.includes(b));
+}
+
+function openChat(db: DB, groupId: string, a: string, b: string, origin: Chat["origin"]): string {
+  const existing = findChat(db, groupId, a, b);
   if (existing) return existing.id;
   const now = Date.now();
-  const chat: Chat = { id: newId("chat"), groupId: g.id, members: [userId, other], createdAt: now, expiresAt: now + CHAT_TTL_MS, messages: [] };
+  const chat: Chat = { id: newId("chat"), groupId, members: [a, b], origin, createdAt: now, expiresAt: now + CHAT_TTL_MS, messages: [] };
   db.chats[chat.id] = chat;
   return chat.id;
 }
 
+function ensureChatIfMutual(db: DB, g: Group, userId: string): string | null {
+  const other = g.reveals[userId];
+  if (!other || g.reveals[other] !== userId) return null;
+  return openChat(db, g.id, userId, other, "mutual");
+}
+
+// ───────────── 직진하기 ─────────────
+// 쪽지를 보낸 사람 중 1명에게, 로테이션마다 1번 채팅을 신청할 수 있어요.
+// 받은 사람이 수락하면 24시간 채팅방이 열려요. 거절·무응답은 보낸 사람에게 구분하지 않고 알려요.
+
+export const STRAIGHT_TTL_MS = 24 * 3600_000;
+export const STRAIGHT_MESSAGE_MAX = 100;
+/** 로테이션마다 무료로 쓸 수 있는 직진 횟수. 0으로 두면 직진권(나중에 결제로 충전)이 있어야 해요. */
+const STRAIGHT_FREE = () => Number(process.env.HIRO_STRAIGHT_FREE ?? 1);
+
+function straightCandidates(db: DB, g: Group, userId: string) {
+  return Object.keys(g.letters[userId] ?? {}).filter((to) => !findChat(db, g.id, userId, to));
+}
+
+export function sendStraight(userId: string, groupId: string, to: string, message: string): string | null {
+  return mutate((db) => {
+    const g = db.groups[groupId];
+    if (!g || !g.memberIds.includes(userId)) return "참여한 그룹이 아니에요.";
+    if (g.status !== "done") return "로테이션이 끝난 뒤에 할 수 있어요.";
+    g.straights ??= {};
+    if (g.straights[userId]) return "이번 로테이션의 직진은 이미 사용했어요.";
+    if (!g.letters[userId]?.[to]) return "쪽지를 보낸 분에게만 직진할 수 있어요.";
+    if (findChat(db, g.id, userId, to)) return "이미 채팅방이 열려 있어요.";
+    const me = db.users[userId];
+    let paid: "free" | "ticket" = "free";
+    if (STRAIGHT_FREE() < 1) {
+      if (!me.straightTickets) return "직진권이 필요해요.";
+      me.straightTickets -= 1;
+      paid = "ticket";
+    }
+    const now = Date.now();
+    g.straights[userId] = {
+      to,
+      message: message.trim().slice(0, STRAIGHT_MESSAGE_MAX),
+      at: now,
+      expiresAt: now + STRAIGHT_TTL_MS,
+      status: "pending",
+      paid,
+      demoReply: db.users[to]?.isDemo ? { at: now + 4_000 + Math.random() * 8_000, accept: Math.random() < 0.7 } : undefined,
+    };
+    return null;
+  });
+}
+
+export function respondStraight(userId: string, groupId: string, from: string, accept: boolean): { error?: string; chatId?: string } {
+  return mutate((db) => {
+    const st = db.groups[groupId]?.straights?.[from];
+    if (!st || st.to !== userId) return { error: "직진 신청을 찾을 수 없어요." };
+    if (st.status !== "pending") return { error: "이미 응답했거나 시간이 지났어요." };
+    if (Date.now() > st.expiresAt) {
+      st.status = "expired";
+      return { error: "24시간이 지나 신청이 만료됐어요." };
+    }
+    if (!accept) {
+      st.status = "declined";
+      return {};
+    }
+    st.status = "accepted";
+    st.chatId = openChat(db, groupId, from, userId, "straight");
+    return { chatId: st.chatId };
+  });
+}
+
+/** 직진 만료와 데모 자동 응답 */
+export function processStraights(now = Date.now()) {
+  const db = readDb();
+  const due = Object.values(db.groups).some((g) =>
+    Object.values(g.straights ?? {}).some((st) => st.status === "pending" && (now > st.expiresAt || (st.demoReply && now >= st.demoReply.at))),
+  );
+  if (!due) return;
+  mutate((db) => {
+    for (const g of Object.values(db.groups)) {
+      for (const [from, st] of Object.entries(g.straights ?? {})) {
+        if (st.status !== "pending") continue;
+        if (now > st.expiresAt) st.status = "expired";
+        else if (st.demoReply && now >= st.demoReply.at) {
+          if (st.demoReply.accept) {
+            st.status = "accepted";
+            st.chatId = openChat(db, g.id, from, st.to, "straight");
+          } else st.status = "declined";
+        }
+      }
+    }
+  });
+}
+
 /** 데모가 먼저 나를 지목해 둔 경우에도, 내가 지목하는 순간 위에서 채팅방이 열려요. 시간이 지난 채팅방은 내용과 함께 지웁니다. */
 export function purgeExpired(now = Date.now()) {
+  processStraights(now);
   const db = readDb();
   const expired = Object.values(db.chats).filter((c) => c.expiresAt <= now);
   const oldGroups = Object.values(db.groups).filter((g) => g.status === "done" && g.finishedAt && now - g.finishedAt > REPORT_KEEP_MS);
@@ -172,6 +275,29 @@ export function reportView(userId: string, groupId: string, publicMember: (id: s
     revealedIndex: revealed ? order.indexOf(revealed) : null,
     mutual: Boolean(revealed && g.reveals[revealed] === userId),
     chat: chat ? { id: chat.id, expiresAt: chat.expiresAt } : null,
+    // 직진하기
+    straight: (() => {
+      const mine = g.straights?.[userId];
+      const sentStatus = mine ? (mine.status === "pending" ? "pending" : mine.status === "accepted" ? "accepted" : "missed") : null;
+      return {
+        // 보낸 사람에게는 거절과 만료를 구분하지 않아요
+        sent: mine ? { to: publicMember(mine.to), message: mine.message, status: sentStatus, chatId: mine.chatId ?? null } : null,
+        candidates: done && !mine ? straightCandidates(db, g, userId).map((id) => publicMember(id)) : [],
+        free: STRAIGHT_FREE(),
+        tickets: db.users[userId]?.straightTickets ?? 0,
+        received: Object.entries(g.straights ?? {})
+          .filter(([, st]) => st.to === userId)
+          .map(([from, st]) => ({
+            from: publicMember(from),
+            fromId: from,
+            letter: g.letters[from]?.[userId] ?? "",
+            message: st.message,
+            status: st.status,
+            expiresAt: st.expiresAt,
+            chatId: st.chatId ?? null,
+          })),
+      };
+    })(),
     // 내가 보낸 쪽지와 내 메모: 만난 사람별로 한눈에
     people: met.map((id) => ({
       member: publicMember(id),
@@ -202,7 +328,12 @@ export function myRecords(userId: string, publicMember: (id: string) => unknown)
       const last = c.messages[c.messages.length - 1];
       return { id: c.id, other: publicMember(other), expiresAt: c.expiresAt, last: last ? { text: last.text, mine: last.from === userId } : null };
     });
-  return { now, groups, chats };
+  const straights = Object.values(db.groups).flatMap((g) =>
+    Object.entries(g.straights ?? {})
+      .filter(([, st]) => st.to === userId && st.status === "pending")
+      .map(([from, st]) => ({ groupId: g.id, from: publicMember(from), message: st.message, expiresAt: st.expiresAt })),
+  );
+  return { now, groups, chats, straights };
 }
 
 export function chatView(userId: string, chatId: string, publicMember: (id: string) => unknown) {

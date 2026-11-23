@@ -12,10 +12,18 @@ export const metadata: Metadata = {
 export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#9b5cff" };
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  // 열려 있는 채팅방 수 (메뉴 배지)
+  // 열려 있는 채팅방 + 받은 직진 수 (메뉴 배지)
   const uid = await currentUserId();
   const now = Date.now();
-  const openChats = uid ? Object.values(readDb().chats).filter((c) => c.members.includes(uid) && c.expiresAt > now).length : 0;
+  const db = readDb();
+  const openChats = uid
+    ? Object.values(db.chats).filter((c) => c.members.includes(uid) && c.expiresAt > now).length +
+      // 응답을 기다리는 직진도 함께 셉니다
+      Object.values(db.groups).reduce(
+        (n, g) => n + Object.values(g.straights ?? {}).filter((st) => st.to === uid && st.status === "pending" && st.expiresAt > now).length,
+        0,
+      )
+    : 0;
   return (
     <html lang="ko">
       <head>

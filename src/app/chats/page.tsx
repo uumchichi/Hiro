@@ -15,7 +15,11 @@ interface ChatItem {
 
 /** 열려 있는 24시간 채팅방 모아 보기 */
 export default function ChatsPage() {
-  const [data, setData] = useState<{ now: number; chats: ChatItem[] } | null>(null);
+  const [data, setData] = useState<{
+    now: number;
+    chats: ChatItem[];
+    straights: { groupId: string; from: PublicMember; message: string; expiresAt: number }[];
+  } | null>(null);
   const [offset, setOffset] = useState(0);
   const [, setTick] = useState(0);
 
@@ -25,7 +29,7 @@ export default function ChatsPage() {
         .then((r) => r.json())
         .then((d) => {
           setOffset(d.now - Date.now());
-          setData({ now: d.now, chats: d.chats });
+          setData({ now: d.now, chats: d.chats, straights: d.straights ?? [] });
         })
         .catch(() => {});
     load();
@@ -47,6 +51,23 @@ export default function ChatsPage() {
         <h1 className="text-2xl font-extrabold">채팅</h1>
         <p className="mt-1 text-sm text-muted">서로의 쪽지 주인을 찾은 분과의 채팅방이에요. 각 채팅방은 열린 뒤 24시간이 지나면 대화 내용과 함께 사라져요.</p>
       </div>
+
+      {data.straights.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="font-bold">💘 받은 직진</h2>
+          {data.straights.map((st) => (
+            <Link key={st.groupId + st.from.id} href={`/report/${st.groupId}`} className="card flex items-center justify-between gap-3 border-[var(--tek)] !p-4">
+              <div className="min-w-0">
+                <p className="font-bold">
+                  {st.from.emoji} {st.from.nickname}님이 직진했어요
+                </p>
+                <p className="truncate text-sm text-muted">{st.message || "수락하면 채팅방이 열려요"}</p>
+              </div>
+              <span className="shrink-0 text-sm font-semibold text-brand">답하기 →</span>
+            </Link>
+          ))}
+        </section>
+      )}
 
       {chats.length === 0 ? (
         <div className="card space-y-3 text-center">

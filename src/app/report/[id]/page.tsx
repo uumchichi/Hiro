@@ -17,6 +17,21 @@ interface Report {
   mutual: boolean;
   chat: { id: string; expiresAt: number } | null;
   people: { member: PublicMember; letter: string; memo: string }[];
+  straight: {
+    sent: { to: PublicMember; message: string; status: "pending" | "accepted" | "missed"; chatId: string | null } | null;
+    candidates: PublicMember[];
+    free: number;
+    tickets: number;
+    received: {
+      from: PublicMember;
+      fromId: string;
+      letter: string;
+      message: string;
+      status: "pending" | "accepted" | "declined" | "expired";
+      expiresAt: number;
+      chatId: string | null;
+    }[];
+  };
 }
 
 export default function ReportPage() {
@@ -25,6 +40,9 @@ export default function ReportPage() {
   const [err, setErr] = useState<string | null>(null);
   const [confirmIdx, setConfirmIdx] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
+  const [straightTo, setStraightTo] = useState<string | null>(null);
+  const [straightMsg, setStraightMsg] = useState("");
+  const [straightConfirm, setStraightConfirm] = useState(false);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/report/${id}`, { cache: "no-store" });
@@ -45,6 +63,17 @@ export default function ReportPage() {
     const d = await res.json().catch(() => ({}));
     if (!res.ok) setErr(d.error ?? "실패했어요.");
     setConfirmIdx(null);
+    setBusy(false);
+    load();
+  }
+
+  async function straight(body: unknown) {
+    setBusy(true);
+    setErr(null);
+    const res = await fetch(`/api/report/${id}/straight`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) setErr(d.error ?? "실패했어요.");
+    setStraightConfirm(false);
     setBusy(false);
     load();
   }
@@ -80,6 +109,36 @@ export default function ReportPage() {
       </section>
 
       {err && <p className="rounded-2xl bg-brand-soft px-4 py-3 text-sm font-semibold">{err}</p>}
+
+      {/* 받은 직진 */}
+      {r.straight.received.map((st) => (
+        <section key={st.fromId} className="card space-y-3 border-[var(--tek)]">
+          <p className="text-lg font-extrabold">💘 {st.from.nickname}님이 직진했어요</p>
+          <MemberCard m={st.from} report={`straight:${r.id}`} />
+          {st.letter && <p className="whitespace-pre-wrap text-[15px]">💌 “{st.letter}”</p>}
+          {st.message && <p className="whitespace-pre-wrap rounded-2xl bg-brand-soft px-4 py-3 text-sm">💬 {st.message}</p>}
+          {st.status === "pending" && (
+            <>
+              <p className="text-xs text-muted">수락하면 24시간 동안 둘만의 채팅방이 열려요. {fmtRemain(st.expiresAt - Date.now())} 안에 답해 주세요. 거절해도 상대에게는 거절했다고 알려지지 않아요.</p>
+              <div className="grid grid-cols-2 gap-3">
+                <button className="btn-ghost" disabled={busy} onClick={() => straight({ action: "respond", from: st.fromId, accept: false })}>
+                  다음에요
+                </button>
+                <button className="btn-primary" disabled={busy} onClick={() => straight({ action: "respond", from: st.fromId, accept: true })}>
+                  수락하기
+                </button>
+              </div>
+            </>
+          )}
+          {st.status === "accepted" && st.chatId && (
+            <Link href={`/chat/${st.chatId}`} className="btn-primary w-full">
+              채팅방 열기
+            </Link>
+          )}
+          {st.status === "declined" && <p className="text-sm text-muted">이번엔 정중히 넘겼어요.</p>}
+          {st.status === "expired" && <p className="text-sm text-muted">응답 시간이 지났어요.</p>}
+        </section>
+      ))}
 
       {/* 매칭 */}
       {r.mutual && r.chat && (
@@ -123,6 +182,54 @@ export default function ReportPage() {
         )}
       </section>
 
+      {/* 직진하기 */}
+      {r.done && (
+        <section className="card space-y-3">
+          <div>
+            <h2 className="text-lg font-bold">💘 직진하기</h2>
+            <p className="text-sm text-muted">
+              쪽지 주인 찾기로 이어지지 않았어도, 쪽지를 보낸 분 중 <b>한 명</b>에게 채팅을 신청할 수 있어요. 로테이션마다 한 번, 상대가 수락하면 24시간 채팅방이 열려요. 직진은 <b>내가 누구인지 상대에게 보여요</b>.
+            </p>
+          </div>
+          {r.straight.sent ? (
+            <div className="rounded-2xl bg-brand-soft px-4 py-3 text-sm">
+              <p>
+                <b>{r.straight.sent.to.nickname}</b>님에게 직진했어요.
+              </p>
+              {r.straight.sent.status === "pending" && <p className="mt-1 text-muted">답을 기다리고 있어요. 최대 24시간이 걸릴 수 있어요.</p>}
+              {r.straight.sent.status === "accepted" && r.straight.sent.chatId && (
+                <Link href={`/chat/${r.straight.sent.chatId}`} className="btn-primary mt-3 w-full">
+                  수락했어요! 채팅방 열기
+                </Link>
+              )}
+              {r.straight.sent.status === "missed" && <p className="mt-1 text-muted">이번엔 이어지지 않았어요. 다음 만남을 응원해요.</p>}
+            </div>
+          ) : r.straight.candidates.length === 0 ? (
+            <p className="text-sm text-muted">
+              {r.people.some((p) => p.letter) ? "쪽지를 보낸 분들과는 이미 채팅방이 열려 있어요." : "쪽지를 보낸 분에게만 직진할 수 있어요. 다음 로테이션에서 마음에 드는 분께 쪽지를 남겨 보세요."}
+            </p>
+          ) : (
+            <>
+              <div className="flex flex-wrap gap-2">
+                {r.straight.candidates.map((c) => (
+                  <button key={c.id} type="button" aria-pressed={straightTo === c.id} className={`chip ${straightTo === c.id ? "chip-on" : ""}`} onClick={() => setStraightTo(c.id)}>
+                    {c.emoji} {c.nickname}
+                  </button>
+                ))}
+              </div>
+              {straightTo && (
+                <>
+                  <input className="input text-sm" maxLength={100} placeholder="한마디 남기기 (선택)" value={straightMsg} onChange={(e) => setStraightMsg(e.target.value)} />
+                  <button className="btn-primary w-full" onClick={() => setStraightConfirm(true)}>
+                    💘 직진하기
+                  </button>
+                </>
+              )}
+            </>
+          )}
+        </section>
+      )}
+
       {/* 메모 리포트 */}
       <section className="space-y-3">
         <div>
@@ -151,6 +258,24 @@ export default function ReportPage() {
           내 기록
         </Link>
       </div>
+
+      {straightConfirm && straightTo && (
+        <div className="fixed inset-0 z-50 grid place-items-end bg-black/40 p-4 sm:place-items-center" role="dialog" aria-modal="true">
+          <div className="w-full max-w-sm space-y-4 rounded-[2rem] bg-surface p-6 text-center shadow-2xl">
+            <p className="text-3xl">💘</p>
+            <p className="text-lg font-bold">{r.straight.candidates.find((c) => c.id === straightTo)?.nickname}님에게 직진할까요?</p>
+            <p className="text-sm text-muted">직진은 이번 로테이션에서 <b>한 번만</b> 할 수 있고, 상대에게 내가 누구인지 보여요.</p>
+            <div className="grid grid-cols-2 gap-3">
+              <button className="btn-ghost" onClick={() => setStraightConfirm(false)}>
+                취소
+              </button>
+              <button className="btn-primary" disabled={busy} onClick={() => straight({ action: "send", to: straightTo, message: straightMsg })}>
+                직진하기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {confirmIdx !== null && (
         <div className="fixed inset-0 z-50 grid place-items-end bg-black/40 p-4 sm:place-items-center" role="dialog" aria-modal="true">
