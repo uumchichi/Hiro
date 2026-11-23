@@ -224,3 +224,56 @@ export async function splitSession(users: User[], theme: Theme): Promise<SplitPl
     return rule();
   }
 }
+
+// ───────────────────────── 4. 초대장 보낼 사람 고르기 ─────────────────────────
+// 바로 시작: 대기실에 있는 사람 중 한 테마로 함께 초대할 사람들을 고릅니다.
+// 예약: 선호 시간대가 겹치는 시간을 하나 고르고, 그 시간이 되는 사람들을 고릅니다.
+
+const InviteSchema = z.object({
+  themeId: z.string().describe("고른 테마의 id"),
+  cellKey: z.string().describe("예약 초대일 때 고른 시간 후보의 key, 바로 시작이면 빈 문자열"),
+  memberIds: z.array(z.string()).describe("초대할 참가자 id. 서로 cannotMeet 관계가 없어야 함"),
+});
+
+export async function suggestInvite(
+  pool: { user: User; interests: string[]; priority: number; waitedSec?: number }[],
+  themes: Theme[],
+  size: { min: number; max: number },
+  cells?: { key: string; label: string; available: string[] }[],
+): Promise<{ themeId: string; cellKey: string; memberIds: string[] } | null> {
+  if (!aiEnabled()) return null;
+  const users = pool.map((p) => p.user);
+  const lines = pool.map((p) => {
+    const base = JSON.parse(poolSummary([p.user]).trim());
+    return JSON.stringify({
+      ...base,
+      cannotMeet: users.filter((o) => o.id !== p.user.id && !compatible(p.user, o)).map((o) => o.id),
+      interests: p.interests.length ? p.interests : "아무 테마나",
+      priority: p.priority,
+      ...(p.waitedSec !== undefined ? { waitedSec: p.waitedSec } : {}),
+    });
+  });
+  const timePart = cells
+    ? `이번 초대는 예약 초대입니다. 아래 시간 후보 중 하나를 골라 cellKey에 넣고, 그 시간에 가능한(available) 사람만 초대하세요. ` +
+      `가능한 사람이 많고 서로 잘 맞는 시간을 고르세요.\n\n시간 후보:\n${JSON.stringify(cells)}\n\n`
+    : "이번 초대는 지금 바로 시작하는 초대입니다. cellKey는 빈 문자열로 두세요.\n\n";
+  try {
+    return await askStructured({
+      effort: "low",
+      schema: InviteSchema,
+      system:
+        AGENT_SYSTEM +
+        " tg는 깁텍 성향(0=온텍, 10=온깁, 플라토닉은 별도)입니다. 공개 여부와 상관없이 매칭에만 씁니다. " +
+        "서로 cannotMeet 관계인 두 사람은 절대 함께 초대하지 않습니다.",
+      user:
+        `한 테마로 함께 초대할 ${size.min}~${size.max}명을 골라 주세요. ` +
+        `선착순으로 수락한 사람끼리 1:1 음성 대화를 돌아가며 하므로, 초대한 사람들은 모두 서로 조건이 맞아야 합니다. ` +
+        `관심 테마가 있는 사람은 그 테마로만 초대하세요. priority가 높거나 오래 기다린 사람을 우선하고, ` +
+        `각자 원하는 상대 성향(wants)이 서로 맞도록 골라 주세요.\n\n${timePart}` +
+        `테마:\n${JSON.stringify(themes.map((t) => ({ id: t.id, title: t.title, tags: t.tags })))}\n\n참가자:\n${lines.join("\n")}`,
+    });
+  } catch (err) {
+    console.error("[ai] suggestInvite failed, using rules", err);
+    return null;
+  }
+}

@@ -1,5 +1,6 @@
 // 혼자서도 매칭·로테이션 흐름을 시험할 수 있도록 데모 참가자를 만듭니다.
 import { DEFAULT_PREFS, HAIR } from "./compat";
+import { BANDS, cellKey } from "./schedule";
 import { computeTraits, ruleAnalysis } from "./heuristics";
 import { QUESTIONS, REGIONS, TAG_GROUPS } from "./questions";
 import { newId } from "./store";
@@ -46,6 +47,12 @@ export function makeDemoUser(i: number): User {
     profile,
     answers,
     analysis: ruleAnalysis(traits, profile.tags),
+    // 저녁·밤과 주말에 몰리도록 선호 시간대를 고릅니다.
+    availability: [0, 1, 2, 3, 4, 5, 6].flatMap((d) =>
+      BANDS.filter((b) => Math.random() < (b.id === "evening" || b.id === "night" ? 0.55 : d === 0 || d === 6 ? 0.4 : 0.1)).map((b) =>
+        cellKey(d, b.id),
+      ),
+    ),
     partnerWants: {
       energy: pick(["low", "any", "high"] as const),
       empathy: pick(["any", "high"] as const),

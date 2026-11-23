@@ -73,8 +73,8 @@ export default function MePage() {
 
       {error && <p className="text-sm font-semibold text-brand">{error}</p>}
       <div className="flex flex-wrap gap-3">
-        <Link href={state.user.status === "grouped" ? "/room" : "/themes"} className="btn-primary">
-          {state.user.status === "grouped" ? "대화방으로 가기" : "테마 둘러보기"}
+        <Link href={state.user.status === "grouped" ? "/room" : "/lobby"} className="btn-primary">
+          {state.user.status === "grouped" ? "대화방으로 가기" : "대기실 입장하기"}
         </Link>
         <Link href="/quiz" className="btn-ghost">검사 다시 하기</Link>
         <Link href="/start" className="btn-ghost">프로필 수정</Link>

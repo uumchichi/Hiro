@@ -3,6 +3,7 @@ import { aiEnabled } from "@/lib/ai";
 import { GROUP_MAX, GROUP_MIN } from "@/lib/heuristics";
 import { currentPhase } from "@/lib/rotation";
 import { isAdmin, livekitConfigured, syncGroupStatus } from "@/lib/server";
+import { isOnline, processLobby } from "@/lib/lobby";
 import { isPresent, processDueSlots } from "@/lib/slots";
 import { readDb } from "@/lib/store";
 
@@ -12,6 +13,7 @@ export async function GET() {
   if (!(await isAdmin())) return NextResponse.json({ error: "운영자 키가 필요해요." }, { status: 401 });
   const now = Date.now();
   processDueSlots(now);
+  processLobby(now);
   const db = readDb();
   const users = Object.values(db.users);
   const name = (id: string) => db.users[id]?.profile?.nickname ?? id;
@@ -53,5 +55,32 @@ export async function GET() {
     catalog: db.catalog ? { source: db.catalog.source, note: db.catalog.note, createdAt: db.catalog.createdAt, count: db.catalog.themes.length } : null,
     slots,
     groups,
+    lobby: Object.entries(db.lobby)
+      .map(([id, e]) => ({
+        id,
+        nickname: name(id),
+        demo: !!db.users[id]?.isDemo,
+        online: isOnline(db, id, now),
+        priority: e.priority,
+        waitedSec: Math.round((now - e.joinedAt) / 1000),
+        interests: e.interests.length,
+      }))
+      .sort((a, b) => b.waitedSec - a.waitedSec),
+    invites: Object.values(db.invites)
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, 10)
+      .map((i) => ({
+        id: i.id,
+        kind: i.kind,
+        startsAt: i.startsAt ?? null,
+        theme: i.theme,
+        status: i.status,
+        source: i.source,
+        expiresAt: i.expiresAt,
+        invitees: i.invitees.map((id) => ({
+          nickname: name(id),
+          state: i.accepted.includes(id) ? "accepted" : i.declined.includes(id) ? "declined" : "pending",
+        })),
+      })),
   });
 }

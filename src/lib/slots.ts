@@ -1,21 +1,19 @@
 // 테마 세션: 테마 게시판 유지, 신청, 대기실 입장, 시작 시간에 자동으로 그룹 만들기
 import { generateCatalog, splitSession } from "./ai";
-import { GROUP_MIN, defaultIcebreakers, ruleCatalog } from "./heuristics";
-import { buildRotation } from "./rotation";
+import { createGroup } from "./groups";
+import { GROUP_MIN, ruleCatalog } from "./heuristics";
 import { mutate, newId, readDb } from "./store";
-import type { Group, Slot, Theme } from "./types";
+import type { Slot, Theme } from "./types";
 
 const MIN = 60_000;
 export const CHECKIN_OPEN_MS = Number(process.env.HIRO_CHECKIN_MINUTES ?? 10) * MIN; // 시작 몇 분 전부터 대기실 입장
 const PRESENCE_MS = 45_000; // 대기실 신호가 이 시간 안에 있어야 '접속 중'
 const SLOT_INTERVAL_MS = Number(process.env.HIRO_SLOT_INTERVAL_MINUTES ?? 60) * MIN;
-const UPCOMING = Number(process.env.HIRO_UPCOMING_SLOTS ?? 6); // 게시판에 늘 열려 있는 세션 수
+const UPCOMING = Number(process.env.HIRO_UPCOMING_SLOTS ?? 3); // 게시판에 늘 열려 있는 세션 수
 const KEEP_FINISHED_MS = 3 * 60 * MIN;
-const ROUND_SECONDS = () => Number(process.env.HIRO_ROUND_SECONDS ?? 300);
-const BREAK_SECONDS = () => Number(process.env.HIRO_BREAK_SECONDS ?? 20);
 const COUNTDOWN_MS = 15_000; // 그룹이 정해진 뒤 첫 라운드까지
 
-function catalogThemes(): Theme[] {
+export function catalogThemes(): Theme[] {
   return readDb().catalog?.themes ?? ruleCatalog();
 }
 
@@ -36,7 +34,7 @@ function newSlot(theme: Theme, startsAt: number): Slot {
 /** 앞으로 열릴 세션이 UPCOMING개보다 적으면 채웁니다. */
 export function ensureSlots(now = Date.now()) {
   const db = readDb();
-  const open = Object.values(db.slots).filter((s) => s.status === "open" && s.startsAt > now);
+  const open = Object.values(db.slots).filter((s) => s.status === "open" && s.startsAt > now && !s.inviteOnly);
   if (open.length >= UPCOMING) return;
   mutate((db) => {
     const themes = catalogThemes();
@@ -77,6 +75,16 @@ export function createSlotIn(minutes: number, roundSeconds?: number, themeTitle?
   return slot;
 }
 
+/** 예약 초대가 확정되면 그 시간의 세션을 만듭니다. mutate() 안에서 호출하세요. */
+export function createConfirmedSlot(db: import("./types").DB, theme: Theme, startsAt: number, applicants: string[]) {
+  const slot = newSlot(theme, startsAt);
+  slot.applicants = applicants;
+  slot.note = "AI 예약 초대로 확정된 세션이에요.";
+  slot.inviteOnly = true;
+  db.slots[slot.id] = slot;
+  return slot;
+}
+
 export async function refreshCatalog() {
   const users = Object.values(readDb().users).filter((u) => u.analysis);
   const { themes, note, source } = await generateCatalog(users);
@@ -85,7 +93,7 @@ export async function refreshCatalog() {
     db.catalogCursor = 0;
     // 아직 아무도 신청하지 않은 세션은 새 테마로 바꿔 다시 채웁니다.
     for (const s of Object.values(db.slots)) {
-      if (s.status === "open" && s.applicants.length === 0) delete db.slots[s.id];
+      if (s.status === "open" && s.applicants.length === 0 && !s.inviteOnly) delete db.slots[s.id];
     }
   });
   ensureSlots();
@@ -96,6 +104,7 @@ export function setApplied(userId: string, slotId: string, on: boolean) {
   return mutate((db) => {
     const s = db.slots[slotId];
     if (!s || s.status !== "open") return "이미 마감된 세션이에요.";
+    if (s.inviteOnly) return "초대받은 분만 참여할 수 있는 세션이에요.";
     if (on && !s.applicants.includes(userId)) s.applicants.push(userId);
     if (!on) {
       s.applicants = s.applicants.filter((id) => id !== userId);
@@ -173,27 +182,14 @@ async function formSlot(slotId: string, now: number) {
       // 그사이 다른 세션에 들어간 사람은 제외
       const members = chunk.map((u) => u.id).filter((id) => db.users[id]?.status !== "grouped");
       if (members.length < GROUP_MIN) continue;
-      const group: Group = {
-        id: newId("g"),
-        createdAt: Date.now(),
+      const group = createGroup(db, {
         theme: s.theme,
         memberIds: members,
         reason: `'${s.theme.title}' 테마를 함께 고른 분들이에요.`,
-        icebreakers: s.theme.icebreakers?.length ? s.theme.icebreakers : defaultIcebreakers(s.theme),
-        status: "live",
-        rounds: buildRotation(members),
-        roundSeconds: s.roundSeconds ?? ROUND_SECONDS(),
-        breakSeconds: BREAK_SECONDS(),
-        startedAt: startAt,
-        choices: {},
-        submitted: [],
-      };
-      db.groups[group.id] = group;
+        startInMs: startAt - Date.now(),
+        roundSeconds: s.roundSeconds,
+      });
       s.groupIds.push(group.id);
-      for (const id of members) {
-        db.users[id].status = "grouped";
-        db.users[id].groupId = group.id;
-      }
     }
     const grouped = new Set(s.groupIds.flatMap((gid) => db.groups[gid].memberIds));
     s.missed = s.applicants.filter((id) => !grouped.has(id));

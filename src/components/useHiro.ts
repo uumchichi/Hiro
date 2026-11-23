@@ -79,7 +79,7 @@ export function nextPath(s: ViewState | null) {
     case "profiled":
       return "/quiz";
     case "analyzed":
-      return "/themes";
+      return "/lobby";
     case "grouped":
       return "/room";
   }

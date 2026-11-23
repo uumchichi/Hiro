@@ -43,10 +43,10 @@ export default function ThemesPage() {
   return (
     <div className="space-y-6 pt-4">
       <div>
-        <h1 className="text-2xl font-extrabold">테마 고르기</h1>
+        <h1 className="text-2xl font-extrabold">이벤트 세션</h1>
         <p className="mt-1 text-muted">
-          마음에 드는 테마를 여러 개 신청해 두세요. 시작 {data.config.checkinMinutes}분 전부터 대기실에 들어갈 수 있고,
-          시작 시간에 대기실에 있는 분들이 {data.config.min}~{data.config.max}명씩 그룹이 되어 대화를 시작해요.
+          정해진 시간에 열리는 특별 세션이에요. 지금 바로 대화하고 싶다면 <Link href="/lobby" className="font-semibold text-brand underline">대기실</Link>에서 AI 초대장을 받아 보세요. 마음에 드는 세션을 여러 개 신청해 두세요. 시작 {data.config.checkinMinutes}분 전부터 입장할 수 있고,
+          시작 시간에 입장해 있는 분들이 {data.config.min}~{data.config.max}명씩 그룹이 되어 대화를 시작해요.
         </p>
       </div>
 
@@ -66,7 +66,7 @@ export default function ThemesPage() {
                 </p>
               </div>
               {s.canCheckIn ? (
-                <Link href={`/lobby?slot=${s.id}`} className="btn-primary">대기실 입장</Link>
+                <Link href={`/waiting?slot=${s.id}`} className="btn-primary">입장하기</Link>
               ) : (
                 <span className="text-sm text-muted">시작 {data.config.checkinMinutes}분 전부터 입장</span>
               )}
@@ -86,7 +86,7 @@ export default function ThemesPage() {
       )}
 
       <section className="space-y-3">
-        <h2 className="font-bold">열려 있는 테마</h2>
+        <h2 className="font-bold">예정된 이벤트</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           {board.map((s) => {
             const ratio = Math.min(1, s.applicants / data.config.min);

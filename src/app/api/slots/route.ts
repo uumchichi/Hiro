@@ -13,7 +13,7 @@ export async function GET() {
   processDueSlots(now);
   const db = readDb();
   const slots = Object.values(db.slots)
-    .filter((s) => s.status === "open" || s.status === "forming" || s.applicants.includes(user.id))
+    .filter((s) => s.applicants.includes(user.id) || (!s.inviteOnly && (s.status === "open" || s.status === "forming")))
     .sort((a, b) => a.startsAt - b.startsAt)
     .map((s) => ({
       id: s.id,

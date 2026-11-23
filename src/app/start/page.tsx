@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useHiro } from "@/components/useHiro";
 import { DEFAULT_PREFS, HAIR, tgColor, tgLabel, type Hair, type MatchPrefs, type MatchTraits } from "@/lib/compat";
 import { REGIONS, TAG_GROUPS } from "@/lib/questions";
+import { BANDS, DAYS, DAY_ORDER, cellKey } from "@/lib/schedule";
 
 const DEFAULT_TRAITS: MatchTraits = { hair: "단머", tg: 5, showTg: false, smoke: "none", tattoo: "none", piercing: "none" };
 
@@ -31,6 +32,7 @@ export default function StartPage() {
   const [confirmWoman, setConfirmWoman] = useState(false);
   const [mt, setMt] = useState<MatchTraits>(DEFAULT_TRAITS);
   const [pf, setPf] = useState<MatchPrefs>(DEFAULT_PREFS);
+  const [avail, setAvail] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -43,14 +45,15 @@ export default function StartPage() {
     setTags(p.tags);
     if (state?.user.matchTraits) setMt(state.user.matchTraits);
     if (state?.user.prefs) setPf(state.user.prefs);
-  }, [state?.user.profile, state?.user.matchTraits, state?.user.prefs]);
+    if (state?.user.availability?.length) setAvail(state.user.availability);
+  }, [state?.user.profile, state?.user.matchTraits, state?.user.prefs, state?.user.availability]);
 
   const toggle = (t: string) => setTags((cur) => (cur.includes(t) ? cur.filter((x) => x !== t) : cur.length >= 12 ? cur : [...cur, t]));
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
-    const ok = await post("/api/profile", { nickname, birthYear: Number(birthYear), region, bio, tags, confirmWoman, matchTraits: { hair: mt.hair, tg: mt.tg, showTg: mt.showTg }, prefs: { hair: pf.hair, tgMin: pf.tgMin, tgMax: pf.tgMax, platonic: pf.platonic } });
+    const ok = await post("/api/profile", { nickname, birthYear: Number(birthYear), region, bio, tags, confirmWoman, availability: avail, matchTraits: { hair: mt.hair, tg: mt.tg, showTg: mt.showTg }, prefs: { hair: pf.hair, tgMin: pf.tgMin, tgMax: pf.tgMax, platonic: pf.platonic } });
     setBusy(false);
     if (ok) router.push(state?.user.analysis ? "/me" : "/quiz");
   }
@@ -186,6 +189,75 @@ export default function StartPage() {
             </div>
           )}
         </div>
+      </div>
+
+      <div className="card space-y-4">
+        <div>
+          <h2 className="text-lg font-bold">선호하는 시간대</h2>
+          <p className="text-sm text-muted">
+            로테이션 소개팅에 참여하기 좋은 시간을 골라 주세요. AI가 시간이 겹치는 분들을 모아 <b>예약 초대장</b>을 보내 드려요. 예: “이번 주 금요일 저녁 7시”
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2 text-sm">
+          {(
+            [
+              ["평일 저녁", [1, 2, 3, 4, 5].map((d) => cellKey(d, "evening"))],
+              ["평일 밤", [1, 2, 3, 4, 5].map((d) => cellKey(d, "night"))],
+              ["주말 언제나", [6, 0].flatMap((d) => BANDS.map((b) => cellKey(d, b.id)))],
+            ] as [string, string[]][]
+          ).map(([label, cells]) => {
+            const on = cells.every((c) => avail.includes(c));
+            return (
+              <button
+                key={label}
+                type="button"
+                aria-pressed={on}
+                className={`chip ${on ? "chip-on" : ""}`}
+                onClick={() => setAvail(on ? avail.filter((c) => !cells.includes(c)) : [...new Set([...avail, ...cells])])}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[320px] border-separate border-spacing-1 text-center text-xs">
+            <thead>
+              <tr>
+                <th />
+                {BANDS.map((b) => (
+                  <th key={b.id} className="font-semibold text-muted">
+                    {b.label}
+                    <span className="block font-normal">{b.range}</span>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {DAY_ORDER.map((d) => (
+                <tr key={d}>
+                  <th className={`pr-1 font-semibold ${d === 0 || d === 6 ? "text-brand" : "text-muted"}`}>{DAYS[d]}</th>
+                  {BANDS.map((b) => {
+                    const key = cellKey(d, b.id);
+                    const on = avail.includes(key);
+                    return (
+                      <td key={key}>
+                        <button
+                          type="button"
+                          aria-pressed={on}
+                          aria-label={`${DAYS[d]}요일 ${b.label}`}
+                          onClick={() => setAvail(on ? avail.filter((c) => c !== key) : [...avail, key])}
+                          className={`h-9 w-full rounded-xl border transition ${on ? "border-transparent bg-hiro" : "border-line hover:bg-brand-soft"}`}
+                        />
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-xs text-muted">{avail.length ? `${avail.length}개 시간대를 골랐어요.` : "고르지 않으면 예약 초대장은 오지 않고, 대기실의 바로 시작 초대장만 받아요."}</p>
       </div>
 
       <div className="card space-y-5">

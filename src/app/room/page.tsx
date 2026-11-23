@@ -17,7 +17,7 @@ export default function RoomPage() {
 
   const group = state?.group;
   useEffect(() => {
-    if (state && !group) router.replace("/themes");
+    if (state && !group) router.replace("/lobby");
   }, [state, group, router]);
   useEffect(() => {
     if (group?.myChoices) setPicks(group.myChoices);
@@ -58,10 +58,10 @@ export default function RoomPage() {
             <button
               className="btn-primary"
               onClick={async () => {
-                if (await post("/api/rejoin")) router.push("/themes");
+                if (await post("/api/rejoin")) router.push("/lobby");
               }}
             >
-              다른 테마 둘러보기
+              대기실로 돌아가기
             </button>
             <Link href="/me" className="btn-ghost">내 성향 보기</Link>
           </div>

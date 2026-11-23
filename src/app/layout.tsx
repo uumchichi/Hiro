@@ -26,7 +26,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           </Link>
           <nav className="flex gap-4 text-sm text-muted">
             <Link href="/me" className="hover:text-ink">내 성향</Link>
-            <Link href="/themes" className="hover:text-ink">테마</Link>
+            <Link href="/lobby" className="hover:text-ink">대기실</Link>
+            <Link href="/themes" className="hover:text-ink">이벤트</Link>
           </nav>
         </header>
         <main className="mx-auto max-w-3xl px-4 pb-20 sm:px-6">{children}</main>

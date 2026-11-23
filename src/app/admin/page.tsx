@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { fmtClock, useTick } from "@/components/useHiro";
 import { fmtUntil, fmtWhen } from "@/components/useSlots";
+import { fmtSlotTime } from "@/lib/schedule";
 import type { Theme } from "@/lib/types";
 
 interface Overview {
@@ -28,7 +29,20 @@ interface Overview {
     phase: { kind: string; round?: number; nextRound?: number; endsAt?: number };
     submitted: number;
   }[];
+  lobby: { id: string; nickname: string; demo: boolean; online: boolean; priority: number; waitedSec: number; interests: number }[];
+  invites: {
+    id: string;
+    kind: "now" | "scheduled";
+    startsAt: number | null;
+    theme: Theme;
+    status: string;
+    source: "ai" | "rule";
+    expiresAt: number;
+    invitees: { nickname: string; state: "accepted" | "declined" | "pending" }[];
+  }[];
 }
+
+const INVITE_STATUS: Record<string, string> = { open: "응답 받는 중", started: "시작됨", confirmed: "예약 확정", expired: "무산" };
 
 const SLOT_STATUS: Record<string, string> = { open: "모집 중", forming: "그룹 나누는 중", started: "진행됨", cancelled: "취소됨" };
 const GROUP_STATUS: Record<string, string> = { ready: "시작 전", live: "대화 중", choosing: "선택 중", done: "종료" };
@@ -114,7 +128,54 @@ export default function AdminPage() {
       {msg && <p className="rounded-2xl bg-brand-soft px-4 py-3 text-sm font-semibold">{msg}</p>}
 
       <section className="card space-y-4">
-        <h2 className="text-lg font-bold">빠른 테스트</h2>
+        <h2 className="text-lg font-bold">대기실 · AI 초대장</h2>
+        <p className="text-sm text-muted">
+          데모 참가자를 대기실에 넣고 내 계정으로 대기실 화면을 열어 두세요. 바로 시작 초대장은 서로 맞는 사람이 모이면 자동으로 나가요(8명이 모이거나 20초 이상 기다리면). 예약 초대장은 30초마다 선호 시간대가 겹치는 사람을 찾아요. 데모는 몇 초~수십 초 안에 응답해요.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <button className="btn-ghost" disabled={!!busy} onClick={() => call("/api/admin/lobby", { action: "seed", count: 6 }, "lobbySeed", "데모 참가자 6명을 대기실에 넣었어요.")}>
+            데모 6명 대기실에 넣기
+          </button>
+          <button className="btn-primary" disabled={!!busy} onClick={() => call("/api/admin/lobby", { action: "invite", kind: "now" }, "inviteNow", "바로 시작 초대장을 만들었어요 (만들 수 있는 경우).")}>
+            ⚡ 바로 시작 초대장 지금 보내기
+          </button>
+          <button className="btn-primary" disabled={!!busy} onClick={() => call("/api/admin/lobby", { action: "invite", kind: "scheduled" }, "inviteSched", "예약 초대장을 만들었어요 (만들 수 있는 경우).")}>
+            📅 예약 초대장 지금 보내기
+          </button>
+        </div>
+        {data && (
+          <p className="text-sm">
+            대기실 {data.lobby.filter((l) => l.online).length}명 접속 중:{" "}
+            <span className="text-muted">
+              {data.lobby
+                .filter((l) => l.online)
+                .map((l) => `${l.nickname}${l.demo ? "*" : ""}${l.priority ? ` ⭐${l.priority}` : ""}`)
+                .join(", ") || "없음"}
+            </span>
+          </p>
+        )}
+        {data?.invites.map((inv) => (
+          <div key={inv.id} className="rounded-2xl border border-line p-4 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="font-bold">
+                {inv.kind === "now" ? "⚡" : "📅"} {inv.theme.emoji} {inv.theme.title}
+                {inv.startsAt && <span className="ml-1 font-normal text-muted">· {fmtSlotTime(inv.startsAt, now)}</span>}
+              </p>
+              <span className="chip">
+                {INVITE_STATUS[inv.status] ?? inv.status}
+                {inv.status === "open" && ` · ${fmtUntil(inv.expiresAt - now)}`}
+              </span>
+            </div>
+            <p className="mt-1 text-muted">
+              {inv.source === "ai" ? "AI" : "규칙"} ·{" "}
+              {inv.invitees.map((p) => `${p.nickname}${p.state === "accepted" ? " ✅" : p.state === "declined" ? " ✖" : " …"}`).join(", ")}
+            </p>
+          </div>
+        ))}
+      </section>
+
+      <section className="card space-y-4">
+        <h2 className="text-lg font-bold">이벤트 세션 테스트</h2>
         <p className="text-sm text-muted">
           데모 참가자를 만든 뒤 곧 시작하는 테스트 세션을 열어 보세요. 내 계정으로 그 세션을 신청하고 대기실에 들어가 있으면, 시작 시간에 데모 참가자들과 그룹이 돼요.
         </p>

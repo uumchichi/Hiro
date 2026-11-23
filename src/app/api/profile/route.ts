@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { DEFAULT_HABITS, DEFAULT_PREFS, HAIR, normalizePrefs, normalizeTraits } from "@/lib/compat";
 import { ALL_TAGS, REGIONS } from "@/lib/questions";
+import { ALL_CELLS } from "@/lib/schedule";
 import { ensureUser, viewState } from "@/lib/server";
 import { mutate } from "@/lib/store";
 
@@ -12,6 +13,7 @@ const Body = z.object({
   bio: z.string().trim().max(300),
   tags: z.array(z.string()).max(12),
   confirmWoman: z.literal(true),
+  availability: z.array(z.string()).max(28),
   matchTraits: z.object({
     hair: z.enum(HAIR),
     tg: z.number().int().min(0).max(10).nullable(),
@@ -38,6 +40,7 @@ export async function POST(req: Request) {
   mutate((db) => {
     const u = db.users[user.id];
     u.profile = profile;
+    u.availability = parsed.data.availability.filter((c) => ALL_CELLS.includes(c));
     // 문담피는 성향 검사에서 받으므로 그대로 둡니다.
     const habits = u.matchTraits ? normalizeTraits(u.matchTraits) : DEFAULT_HABITS;
     u.matchTraits = { ...parsed.data.matchTraits, smoke: habits.smoke, tattoo: habits.tattoo, piercing: habits.piercing };
