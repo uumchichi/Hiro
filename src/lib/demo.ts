@@ -1,5 +1,5 @@
 // 혼자서도 매칭·로테이션 흐름을 시험할 수 있도록 데모 참가자를 만듭니다.
-import { DEFAULT_PREFS, HAIR } from "./compat";
+import { DEFAULT_PREFS, HAIR, suggestRange } from "./compat";
 import { BANDS, cellKey } from "./schedule";
 import { computeTraits, ruleAnalysis } from "./heuristics";
 import { QUESTIONS, REGIONS, TAG_GROUPS } from "./questions";
@@ -31,6 +31,8 @@ export function makeDemoUser(i: number): User {
   for (let k = 0; k < 2; k++) tags.add(pick(TAG_GROUPS[4].tags));
   tags.add(pick(TAG_GROUPS[5].tags));
   const answers = QUESTIONS.map(() => 1 + Math.floor(Math.random() * 5));
+  // 히로 컬러: 양 끝(딥 핑크·딥 블루)과 중간이 고르게, 가끔 옐로(플라토닉)
+  const tg: number | null = Math.random() < 0.1 ? null : pick([0, 1, 2, 3, 5, 7, 8, 9, 10]);
   const traits = computeTraits(answers);
   const profile = {
     nickname: `${pick(NAMES)}${i}`,
@@ -62,22 +64,19 @@ export function makeDemoUser(i: number): User {
     },
     matchTraits: {
       hair: pick([...HAIR]),
-      tg: Math.random() < 0.12 ? null : Math.floor(Math.random() * 11),
+      tg,
       showTg: Math.random() < 0.4,
       smoke: pick(["none", "none", "none", "none", "ecig", "cig"] as const),
       tattoo: pick(["none", "none", "none", "small", "small", "medium", "large"] as const),
       piercing: pick(["none", "none", "ears", "ears", "face"] as const),
     },
-    // 데모는 대부분 너그러운 조건, 일부만 까다로운 조건
-    prefs:
-      Math.random() < 0.7
-        ? { ...DEFAULT_PREFS }
-        : {
-            ...DEFAULT_PREFS,
-            smokeMax: pick(["none", "ecig"] as const),
-            tattooMax: pick(["small", "medium", "large"] as const),
-            tgMin: Math.random() < 0.5 ? 0 : 4,
-            tgMax: Math.random() < 0.5 ? 6 : 10,
-          },
+    // 데모도 실제 사용자처럼 대부분 자기 컬러의 반대쪽을 원하고, 일부는 상관없어요.
+    prefs: {
+      ...DEFAULT_PREFS,
+      ...(Math.random() < 0.75 ? suggestRange(tg) : {}),
+      platonic: tg === null ? "only" : Math.random() < 0.8 ? "ok" : "no",
+      ...(Math.random() < 0.25 ? { smokeMax: pick(["none", "ecig"] as const) } : {}),
+      ...(Math.random() < 0.15 ? { tattooMax: pick(["small", "medium"] as const) } : {}),
+    },
   };
 }

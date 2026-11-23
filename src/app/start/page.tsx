@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useHiro } from "@/components/useHiro";
-import { DEFAULT_PREFS, HAIR, tgColor, tgLabel, type Hair, type MatchPrefs, type MatchTraits } from "@/lib/compat";
+import { DEFAULT_PREFS, HAIR, suggestRange, tgColor, tgLabel, type Hair, type MatchPrefs, type MatchTraits } from "@/lib/compat";
 import { REGIONS, TAG_GROUPS } from "@/lib/questions";
 import { BANDS, DAYS, DAY_ORDER, cellKey } from "@/lib/schedule";
 
@@ -31,7 +31,13 @@ export default function StartPage() {
   const [tags, setTags] = useState<string[]>([]);
   const [confirmWoman, setConfirmWoman] = useState(false);
   const [mt, setMt] = useState<MatchTraits>(DEFAULT_TRAITS);
-  const [pf, setPf] = useState<MatchPrefs>(DEFAULT_PREFS);
+  const [pf, setPf] = useState<MatchPrefs>({ ...DEFAULT_PREFS, ...suggestRange(5) });
+  // 원하는 상대 범위를 직접 바꾸기 전까지는 내 컬러에 맞춰 자동으로 추천해요.
+  const [rangeTouched, setRangeTouched] = useState(false);
+  function setMyTg(tg: number | null) {
+    setMt((cur) => ({ ...cur, tg }));
+    if (!rangeTouched) setPf((cur) => ({ ...cur, ...suggestRange(tg), platonic: tg === null ? "only" : "ok" }));
+  }
   const [avail, setAvail] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
 
@@ -44,7 +50,10 @@ export default function StartPage() {
     setBio(p.bio);
     setTags(p.tags);
     if (state?.user.matchTraits) setMt(state.user.matchTraits);
-    if (state?.user.prefs) setPf(state.user.prefs);
+    if (state?.user.prefs) {
+      setPf(state.user.prefs);
+      setRangeTouched(true); // 이미 저장한 값은 그대로
+    }
     if (state?.user.availability?.length) setAvail(state.user.availability);
   }, [state?.user.profile, state?.user.matchTraits, state?.user.prefs, state?.user.availability]);
 
@@ -101,7 +110,7 @@ export default function StartPage() {
           <p className="label">나의 히로 컬러</p>
           <p className="mb-3 text-sm text-muted">핑크에 가까울수록 리드받는 쪽, 블루에 가까울수록 리드하는 쪽이에요.</p>
           <label className="mb-3 flex items-center gap-2 text-[15px]">
-            <input type="checkbox" className="h-5 w-5 accent-[var(--brand)]" checked={mt.tg === null} onChange={(e) => setMt({ ...mt, tg: e.target.checked ? null : 5 })} />
+            <input type="checkbox" className="h-5 w-5 accent-[var(--brand)]" checked={mt.tg === null} onChange={(e) => setMyTg(e.target.checked ? null : 5)} />
             옐로예요 (플라토닉)
             {mt.tg === null && (
               <span className="ml-1 rounded-full px-2 py-0.5 text-xs font-bold text-ink" style={{ background: tgColor(null) }}>
@@ -117,7 +126,7 @@ export default function StartPage() {
                 max={10}
                 step={1}
                 value={mt.tg}
-                onChange={(e) => setMt({ ...mt, tg: Number(e.target.value) })}
+                onChange={(e) => setMyTg(Number(e.target.value))}
                 className="tg-range w-full"
                 style={{ ["--thumb" as string]: tgColor(mt.tg) }}
                 aria-label="히로 컬러"
@@ -166,13 +175,17 @@ export default function StartPage() {
               { v: "no", label: "옐로는 아니었으면" },
               { v: "only", label: "옐로만" },
             ]}
-            onChange={(platonic) => setPf({ ...pf, platonic })}
+            onChange={(platonic) => {
+              setRangeTouched(true);
+              setPf({ ...pf, platonic });
+            }}
           />
+          {!rangeTouched && <p className="mt-2 text-xs text-muted">✨ 내 히로 컬러와 잘 맞는 범위로 자동 추천했어요. 바꿀 수 있어요.</p>}
           {pf.platonic !== "only" && (
             <div className="mt-3 grid grid-cols-2 gap-3">
               <label className="text-sm">
                 <span className="mb-1 block text-muted">최소</span>
-                <select className="input py-2" value={pf.tgMin} onChange={(e) => setPf({ ...pf, tgMin: Number(e.target.value), tgMax: Math.max(pf.tgMax, Number(e.target.value)) })}>
+                <select className="input py-2" value={pf.tgMin} onChange={(e) => { setRangeTouched(true); setPf({ ...pf, tgMin: Number(e.target.value), tgMax: Math.max(pf.tgMax, Number(e.target.value)) }); }}>
                   {Array.from({ length: 11 }, (_, i) => (
                     <option key={i} value={i}>{`${tgLabel(i)} · ${i}`}</option>
                   ))}
@@ -180,7 +193,7 @@ export default function StartPage() {
               </label>
               <label className="text-sm">
                 <span className="mb-1 block text-muted">최대</span>
-                <select className="input py-2" value={pf.tgMax} onChange={(e) => setPf({ ...pf, tgMax: Number(e.target.value), tgMin: Math.min(pf.tgMin, Number(e.target.value)) })}>
+                <select className="input py-2" value={pf.tgMax} onChange={(e) => { setRangeTouched(true); setPf({ ...pf, tgMax: Number(e.target.value), tgMin: Math.min(pf.tgMin, Number(e.target.value)) }); }}>
                   {Array.from({ length: 11 }, (_, i) => (
                     <option key={i} value={i}>{`${tgLabel(i)} · ${i}`}</option>
                   ))}

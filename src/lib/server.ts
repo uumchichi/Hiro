@@ -115,6 +115,8 @@ export function viewState(userId: string) {
       partner: partnerId ? publicMember(db.users[partnerId]) : null,
       room: phase.kind === "talk" && partnerId ? roomName(g.id, phase.round, userId, partnerId) : null,
       // 지금까지 만난 사람과 내가 쓴 쪽지·메모
+      // 이 그룹에서 내가 대화하는 사람 수 (서로 원하는 쌍끼리만 대화해요)
+      myPartnerCount: g.rounds.filter((r) => r.pairs.some((p) => p.a === userId || p.b === userId)).length,
       met: metPartners(g, userId, now).map((id) => ({
         member: publicMember(db.users[id]) as PublicMember,
         letter: g.letters[userId]?.[id] ?? "",

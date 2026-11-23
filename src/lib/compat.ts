@@ -126,27 +126,11 @@ export function compatible(a: User, b: User) {
   return accepts(a, b) && accepts(b, a);
 }
 
-/** 그룹 안의 모든 쌍이 서로 맞는지 */
-export function groupOk(members: User[]) {
-  for (let i = 0; i < members.length; i++)
-    for (let j = i + 1; j < members.length; j++) if (!compatible(members[i], members[j])) return false;
-  return true;
-}
-
-/**
- * 모든 쌍이 서로 맞도록 사람들을 묶습니다 (탐욕적 방식).
- * 남는 사람은 leftovers로 돌려줍니다.
- */
-export function packCompatible(list: User[], min: number, max: number): { chunks: User[][]; leftovers: User[] } {
-  const chunks: User[][] = [];
-  for (const u of list) {
-    const home = chunks.find((c) => c.length < max && c.every((m) => compatible(m, u)));
-    if (home) home.push(u);
-    else chunks.push([u]);
-  }
-  const ok = chunks.filter((c) => c.length >= min);
-  const leftovers = chunks.filter((c) => c.length < min).flat();
-  return { chunks: ok, leftovers };
+/** 내 히로 컬러에 잘 맞는 상대 범위 추천: 반대쪽을 중심으로 ±3 (예: 딥 블루 10 → 0~3) */
+export function suggestRange(tg: number | null): Pick<MatchPrefs, "tgMin" | "tgMax"> {
+  if (tg === null) return { tgMin: 0, tgMax: 10 };
+  const c = 10 - tg;
+  return { tgMin: Math.max(0, c - 3), tgMax: Math.min(10, c + 3) };
 }
 
 // ── 히로 스펙트럼 색: 플라토닉 노랑 · 온텍 분홍 → 중간 보라 → 온깁 파랑 ──

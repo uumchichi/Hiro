@@ -5,7 +5,7 @@
 //   기한 안에 선착순 4~6명이 수락하면 그 시간의 세션이 확정됩니다.
 // 마감·무산된 사람은 다음 초대에서 우선권을 받습니다.
 import { aiEnabled, suggestInvite } from "./ai";
-import { compatible } from "./compat";
+import { bestGroup, canMeet, prune } from "./meet";
 import { BREAK_SECONDS, ROUND_SECONDS, createGroup } from "./groups";
 import { GROUP_MAX, GROUP_MIN, pairScore } from "./heuristics";
 import { upcomingCells } from "./schedule";
@@ -149,10 +149,12 @@ function settle(db: DB, inv: Invite, now: number) {
   const nobodyLeft = pending(inv).length === 0;
   if (!full && !timeUp && !nobodyLeft) return;
 
-  const members =
-    inv.kind === "now"
-      ? inv.accepted.filter((id) => db.users[id]?.status !== "grouped").slice(0, GROUP_MAX)
-      : inv.accepted.slice(0, GROUP_MAX);
+  // 수락한 사람들(먼저 수락한 순서) 중에서, 각자 최소 MIN_PARTNERS명과 대화할 수 있는 그룹을 만들어요.
+  const accepted = (inv.kind === "now" ? inv.accepted.filter((id) => db.users[id]?.status !== "grouped") : inv.accepted)
+    .map((id) => db.users[id])
+    .filter(Boolean);
+  const viable = accepted.length <= GROUP_MAX ? prune(accepted, GROUP_MIN) : bestGroup(accepted, GROUP_MIN, GROUP_MAX);
+  const members = viable ? viable.map((u) => u.id) : [];
 
   if (members.length >= GROUP_MIN) {
     if (inv.kind === "now") {
@@ -170,7 +172,7 @@ function settle(db: DB, inv: Invite, now: number) {
       inv.slotId = slot.id;
     }
     for (const id of inv.accepted.filter((id) => !members.includes(id))) {
-      bumpPriority(db, id, "선착순이 마감됐어요. 다음 초대에서 우선으로 불러 드릴게요.");
+      bumpPriority(db, id, "이번 그룹에서는 대화할 수 있는 분이 모자랐거나 선착순이 마감됐어요. 다음 초대에서 우선으로 불러 드릴게요.");
     }
   } else if (timeUp || nobodyLeft) {
     inv.status = "expired";
@@ -190,38 +192,22 @@ function wantsTheme(db: DB, userId: string, theme: Theme) {
   return interests.length === 0 || interests.includes(theme.id);
 }
 
-/** 서로 모두 조건이 맞는 사람들을 고릅니다. 우선권·대기 시간이 긴 사람부터, 원하는 성향이 맞는 쪽으로. */
+/**
+ * 초대할 사람들을 고릅니다. 각자 그룹 안에서 최소 MIN_PARTNERS명과 대화할 수 있고, 대화할 수 있는 쌍이 많게.
+ * 우선권·대기 시간이 긴 사람이 먼저 고려되고, 원하는 상대 성향 궁합이 좋은 쪽을 골라요.
+ */
 export function pickClique(db: DB, ids: string[], max: number): string[] {
   const prio = (id: string) => db.lobby[id]?.priority ?? 0;
   const since = (id: string) => db.lobby[id]?.joinedAt ?? db.users[id].createdAt;
-  const order = [...ids].sort((a, b) => prio(b) - prio(a) || since(a) - since(b));
-  // 한 사람씩 차례로 '시작점'으로 삼아 서로 모두 맞는 묶음을 만들어 보고, 가장 큰 묶음을 고릅니다.
-  // (앞에서부터 한 번만 담으면, 먼저 담긴 사람 때문에 큰 묶음을 놓칠 수 있어요.)
-  // 크기가 같으면 우선권이 높거나 오래 기다린 사람에서 시작한 묶음을 고릅니다.
-  let picked: User[] = [];
-  for (let seed = 0; seed < order.length && picked.length < max; seed++) {
-    const group: User[] = [db.users[order[seed]]];
-    for (const id of order) {
-      if (group.length >= max) break;
-      const u = db.users[id];
-      if (group.includes(u)) continue;
-      if (group.every((m) => compatible(m, u))) group.push(u);
-    }
-    if (group.length > picked.length) picked = group;
-  }
-  // 우선권 없는 사람 중 가장 덜 맞는 사람을 더 잘 맞는 사람으로 바꿔 봅니다.
-  const fit = (x: User, group: User[]) => group.filter((m) => m !== x).reduce((s, m) => s + pairScore(m, x), 0);
-  for (const id of order) {
-    if (picked.some((p) => p.id === id) || picked.length === 0) continue;
-    const u = db.users[id];
-    let worst = picked[0];
-    for (const p of picked) if (fit(p, picked) < fit(worst, picked)) worst = p;
-    const others = picked.filter((p) => p !== worst);
-    if (prio(worst.id) === 0 && others.every((m) => compatible(m, u)) && fit(u, [...others, u]) > fit(worst, picked) + 0.5) {
-      picked.splice(picked.indexOf(worst), 1, u);
-    }
-  }
-  return picked.map((u) => u.id);
+  const order = [...ids].sort((a, b) => prio(b) - prio(a) || since(a) - since(b)).map((id) => db.users[id]);
+  const fit = (g: User[]) => {
+    let s = 0;
+    for (let i = 0; i < g.length; i++) for (let j = i + 1; j < g.length; j++) if (canMeet(g[i], g[j])) s += pairScore(g[i], g[j]);
+    // 우선권 있는 사람이 들어가면 가산점
+    return s + g.reduce((n, u) => n + prio(u.id) * 5, 0);
+  };
+  const g = bestGroup(order, GROUP_MIN, max, fit);
+  return g ? g.map((u) => u.id) : [];
 }
 
 function themeScore(db: DB, theme: Theme, ids: string[]) {
@@ -339,13 +325,14 @@ async function makeInvite(kind: Kind, ids: string[], now: number) {
       if (out && theme && (kind === "now" || cell)) {
         // AI 결과 검증: 후보에 있고, 관심 테마·시간이 맞고, 모두 서로 조건이 맞게
         const allowed = new Set(cell ? cell.available : ids);
-        const kept: User[] = [];
+        const raw: User[] = [];
         for (const id of out.memberIds) {
           const u = db.users[id];
-          if (!u || !allowed.has(id) || kept.includes(u) || !wantsTheme(db, id, theme)) continue;
-          if (kept.length < INVITE_SIZE && kept.every((m) => compatible(m, u))) kept.push(u);
+          if (!u || !allowed.has(id) || raw.includes(u) || !wantsTheme(db, id, theme) || raw.length >= INVITE_SIZE) continue;
+          raw.push(u);
         }
-        if (kept.length >= GROUP_MIN) {
+        const kept = prune(raw, GROUP_MIN);
+        if (kept) {
           plan = { theme, memberIds: kept.map((u) => u.id), startsAt: cell?.startsAt };
           source = "ai";
         }

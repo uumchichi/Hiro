@@ -52,6 +52,18 @@ export function estimateExact(people: number, roundSeconds: number, breakSeconds
   return { rounds: roundsFor(people), ms, text: `${people}명 · ${roundsFor(people)}라운드 · 라운드당 ${fmtRound(roundSeconds)} · 약 ${fmtMinutes(ms)}` };
 }
 
+/** 실제 일정(라운드 수)이 정해진 뒤: 끝나는 데 걸리는 시간 */
+export function durationForRounds(rounds: number, roundSeconds: number, breakSeconds: number) {
+  if (!rounds) return 0;
+  return (rounds * roundSeconds + (rounds - 1) * breakSeconds) * 1000;
+}
+
+/** 그룹이 정해진 뒤: "나는 4명과 대화해요 · 총 5라운드 · 라운드당 5분 · 약 26분" */
+export function estimateMine(myPartners: number, rounds: number, roundSeconds: number, breakSeconds: number) {
+  const ms = durationForRounds(rounds, roundSeconds, breakSeconds);
+  return `나는 ${myPartners}명과 대화해요 · 총 ${rounds}라운드 · 라운드당 ${fmtRound(roundSeconds)} · 약 ${fmtMinutes(ms)}`;
+}
+
 export function fmtClockTime(ts: number) {
   const d = new Date(ts);
   const h = d.getHours();

@@ -1,5 +1,6 @@
 // 그룹 만들기 (테마 세션과 AI 초대장이 함께 씁니다)
 import { defaultIcebreakers } from "./heuristics";
+import { canMeet } from "./meet";
 import { buildRotation } from "./rotation";
 import { newId } from "./store";
 import type { DB, Group, Theme } from "./types";
@@ -20,7 +21,8 @@ export function createGroup(
     reason: opts.reason,
     icebreakers: opts.theme.icebreakers?.length ? opts.theme.icebreakers : defaultIcebreakers(opts.theme),
     status: "live",
-    rounds: buildRotation(opts.memberIds),
+    // 성향 조사에서 서로 원하는 쌍끼리만 대화하도록 일정을 짜요.
+    rounds: buildRotation(opts.memberIds, (a, b) => canMeet(db.users[a], db.users[b])),
     roundSeconds: opts.roundSeconds ?? ROUND_SECONDS(),
     breakSeconds: BREAK_SECONDS(),
     startedAt: Date.now() + opts.startInMs,

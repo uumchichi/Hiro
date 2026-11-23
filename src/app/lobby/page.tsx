@@ -287,7 +287,7 @@ export default function LobbyPage() {
                   </button>
                 </div>
               )}
-              <p className="text-center text-xs text-muted">초대받은 분들은 모두 서로의 조건이 맞는 사람들이에요.</p>
+              <p className="text-center text-xs text-muted">성향 조사에서 서로 원하는 분들끼리만 1:1로 대화해요.</p>
             </div>
           </div>
         </div>

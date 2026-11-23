@@ -4,7 +4,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import { GROUP_MAX, GROUP_MIN, balancedPack, ruleAnalysis, ruleCatalog } from "./heuristics";
-import { compatible, groupOk, tgInternal } from "./compat";
+import { tgInternal } from "./compat";
+import { MIN_PARTNERS, canMeet, partnersIn, prune } from "./meet";
 import { PARTNER_QUESTIONS, TRAIT_LABELS } from "./questions";
 import type { Analysis, PartnerWants, Profile, Theme, TraitScores, User } from "./types";
 
@@ -157,8 +158,8 @@ function poolSummary(users: User[]) {
         tags: u.profile?.tags ?? [],
         tg: m ? tgInternal(m.tg) : undefined,
         wants: describeWants(u.partnerWants), // 원하는 상대 성향 (가산점)
-        // 서로 조건이 맞지 않아 같은 그룹에 넣으면 안 되는 사람
-        cannotMeet: users.filter((o) => o.id !== u.id && !compatible(u, o)).map((o) => o.id),
+        // 서로 원하는 조건이 맞아 1:1로 대화할 수 있는 사람
+        canMeet: users.filter((o) => canMeet(u, o)).map((o) => o.id),
       });
     })
     .join("\n");
@@ -174,19 +175,20 @@ export interface SplitPlan {
   source: "ai" | "rule";
 }
 
-/** AI 결과를 검증합니다: 존재하는 id만, 중복 없이, 인원 범위 안에서, 모든 쌍이 서로 맞게. */
+/** AI 결과를 검증합니다: 존재하는 id만, 중복 없이, 인원 범위 안에서, 각자 최소 MIN_PARTNERS명과 대화할 수 있게. */
 function repair(groups: string[][], users: User[]): SplitPlan {
   const byId = new Map(users.map((u) => [u.id, u]));
   const used = new Set<string>();
   const chunks: User[][] = [];
   for (const ids of groups) {
-    const kept: User[] = [];
+    const raw: User[] = [];
     for (const id of ids) {
       const u = byId.get(id);
-      if (!u || used.has(id) || kept.length >= GROUP_MAX) continue;
-      if (groupOk([...kept, u])) kept.push(u);
+      if (!u || used.has(id) || raw.includes(u) || raw.length >= GROUP_MAX) continue;
+      raw.push(u);
     }
-    if (kept.length < GROUP_MIN) continue;
+    const kept = prune(raw, GROUP_MIN);
+    if (!kept) continue;
     kept.forEach((u) => used.add(u.id));
     chunks.push(kept);
   }
@@ -203,7 +205,9 @@ export async function splitSession(users: User[], theme: Theme): Promise<SplitPl
       system:
         AGENT_SYSTEM +
         " tg는 깁텍 성향(0=온텍, 10=온깁, 플라토닉은 별도)입니다. 공개 여부와 상관없이 매칭에만 씁니다. " +
-        "각 참가자의 cannotMeet에 있는 사람과는 절대 같은 그룹에 넣지 않습니다. 그룹 안에서는 모두가 서로 1:1로 대화하기 때문입니다.",
+        "그룹 안에서는 서로의 canMeet에 있는 쌍끼리만 1:1로 대화합니다. " +
+        `그래서 그룹 안에서 각자 최소 ${MIN_PARTNERS()}명 이상과 대화할 수 있어야 하고, 대화할 수 있는 쌍이 많을수록 좋습니다. ` +
+        "예를 들어 tg가 10에 가까운 사람 4명과 0에 가까운 사람 2명이 서로만 원하면, 한 그룹으로 묶어 0에 가까운 사람은 4번, 10에 가까운 사람은 2번 대화하게 합니다.",
       user:
         `'${theme.title}' 세션에 ${users.length}명이 모였습니다. ${GROUP_MIN}~${GROUP_MAX}명씩, 가능한 한 모두가 들어가도록 그룹을 나누세요. ` +
         `각자 원하는 상대 성향(wants)에 맞는 traits를 가진 사람이 같은 그룹에 있도록 하고, 이는 양방향으로 고려하세요. 깁텍도 서로 잘 맞는 사람이 같은 그룹에 있도록 해 주세요.\n\n${poolSummary(users)}`,
@@ -212,7 +216,7 @@ export async function splitSession(users: User[], theme: Theme): Promise<SplitPl
     if (plan.chunks.length === 0) throw new Error("AI produced no valid groups");
     // AI가 남긴 사람도 규칙으로 한 번 더 넣어 봅니다.
     for (const u of [...plan.leftovers]) {
-      const home = plan.chunks.find((c) => c.length < GROUP_MAX && groupOk([...c, u]));
+      const home = plan.chunks.find((c) => c.length < GROUP_MAX && partnersIn(u, c) >= MIN_PARTNERS());
       if (home) {
         home.push(u);
         plan.leftovers = plan.leftovers.filter((x) => x !== u);
@@ -232,7 +236,7 @@ export async function splitSession(users: User[], theme: Theme): Promise<SplitPl
 const InviteSchema = z.object({
   themeId: z.string().describe("고른 테마의 id"),
   cellKey: z.string().describe("예약 초대일 때 고른 시간 후보의 key, 바로 시작이면 빈 문자열"),
-  memberIds: z.array(z.string()).describe("초대할 참가자 id. 서로 cannotMeet 관계가 없어야 함"),
+  memberIds: z.array(z.string()).describe("초대할 참가자 id. 각자 그룹 안에 canMeet인 사람이 최소 2명 이상 있어야 함"),
 });
 
 export async function suggestInvite(
@@ -247,7 +251,7 @@ export async function suggestInvite(
     const base = JSON.parse(poolSummary([p.user]).trim());
     return JSON.stringify({
       ...base,
-      cannotMeet: users.filter((o) => o.id !== p.user.id && !compatible(p.user, o)).map((o) => o.id),
+      canMeet: users.filter((o) => canMeet(p.user, o)).map((o) => o.id),
       interests: p.interests.length ? p.interests : "아무 테마나",
       priority: p.priority,
       ...(p.waitedSec !== undefined ? { waitedSec: p.waitedSec } : {}),
@@ -264,10 +268,11 @@ export async function suggestInvite(
       system:
         AGENT_SYSTEM +
         " tg는 깁텍 성향(0=온텍, 10=온깁, 플라토닉은 별도)입니다. 공개 여부와 상관없이 매칭에만 씁니다. " +
-        "서로 cannotMeet 관계인 두 사람은 절대 함께 초대하지 않습니다.",
+        "수락한 사람들 중 서로의 canMeet에 있는 쌍끼리만 1:1로 대화합니다. " +
+        `초대한 사람 각자가 그 안에서 최소 ${MIN_PARTNERS()}명 이상과 대화할 수 있게, 대화할 수 있는 쌍이 많게 골라 주세요.`,
       user:
         `한 테마로 함께 초대할 ${size.min}~${size.max}명을 골라 주세요. ` +
-        `선착순으로 수락한 사람끼리 1:1 음성 대화를 돌아가며 하므로, 초대한 사람들은 모두 서로 조건이 맞아야 합니다. ` +
+        `선착순으로 수락한 사람들 중 서로 원하는 쌍끼리 1:1 음성 대화를 돌아가며 합니다. ` +
         `관심 테마가 있는 사람은 그 테마로만 초대하세요. priority가 높거나 오래 기다린 사람을 우선하고, ` +
         `각자 원하는 상대 성향(wants)이 서로 맞도록 골라 주세요.\n\n${timePart}` +
         `테마:\n${JSON.stringify(themes.map((t) => ({ id: t.id, title: t.title, tags: t.tags })))}\n\n참가자:\n${lines.join("\n")}`,

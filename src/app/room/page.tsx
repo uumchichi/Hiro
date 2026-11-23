@@ -7,7 +7,7 @@ import { MemberCard } from "@/components/MemberCard";
 import { NotesPanel } from "@/components/NotesPanel";
 import { fmtClock, useHiro, useTick } from "@/components/useHiro";
 import { tgColor } from "@/lib/compat";
-import { durationMs, estimateExact, fmtClockTime } from "@/lib/estimate";
+import { durationForRounds, estimateMine, fmtClockTime } from "@/lib/estimate";
 
 const VoiceRoom = dynamic(() => import("@/components/VoiceRoom"), { ssr: false });
 const OrbPreview = dynamic(() => import("@/components/OrbPreview"), { ssr: false });
@@ -46,10 +46,11 @@ export default function RoomPage() {
         <p className="mt-4 text-6xl font-extrabold tabular-nums">{fmtClock(left)}</p>
         <p className="mt-3 text-muted">곧 첫 번째 대화가 시작돼요. 조용한 곳에서 이어폰을 준비해 주세요.</p>
         <div className="mt-4 rounded-2xl bg-bg px-4 py-3 text-sm">
-          <p className="font-semibold">⏱️ {estimateExact(group.members.length, group.roundSeconds, group.breakSeconds).text}</p>
+          <p className="font-semibold">⏱️ {estimateMine(group.myPartnerCount, group.roundCount, group.roundSeconds, group.breakSeconds)}</p>
+          <p className="mt-1 text-xs text-muted">성향 조사에서 서로 원하는 분들끼리만 1:1로 대화해요. 상대가 없는 라운드는 쉬어요.</p>
           {group.startedAt && (
             <p className="mt-1 text-muted">
-              {fmtClockTime(group.startedAt + durationMs(group.members.length, group.roundSeconds, group.breakSeconds))}쯤 끝나요
+              {fmtClockTime(group.startedAt + durationForRounds(group.roundCount, group.roundSeconds, group.breakSeconds))}쯤 끝나요
             </p>
           )}
         </div>
@@ -71,7 +72,7 @@ export default function RoomPage() {
           라운드 {roundNo} / {group.roundCount}
           {group.startedAt && (
             <span className="block text-xs font-normal text-muted">
-              {fmtClockTime(group.startedAt + durationMs(group.members.length, group.roundSeconds, group.breakSeconds))}쯤 끝나요
+              {fmtClockTime(group.startedAt + durationForRounds(group.roundCount, group.roundSeconds, group.breakSeconds))}쯤 끝나요
             </span>
           )}
         </p>
@@ -132,7 +133,7 @@ export default function RoomPage() {
         <div className="card text-center">
           <p className="text-4xl">🌿</p>
           <p className="mt-2 font-bold">이번 라운드는 쉬는 차례예요</p>
-          <p className="mt-1 text-muted">인원이 홀수라 한 분씩 돌아가며 쉬어요. {fmtClock(left)} 뒤 다음 대화가 시작돼요.</p>
+          <p className="mt-1 text-muted">이번 라운드에는 서로 원하는 조건이 맞는 대화 상대가 없어요. {fmtClock(left)} 뒤 다음 라운드가 시작돼요.</p>
         </div>
       )}
 

@@ -1,5 +1,5 @@
 // AI(Claude)를 쓸 수 없을 때(API 키 없음, 오류) 쓰는 규칙 기반 로직.
-import { compatible, packCompatible } from "./compat";
+import { MIN_PARTNERS, bestGroup, canMeet, partnersIn, prune } from "./meet";
 import { QUESTIONS, TRAIT_LABELS } from "./questions";
 import type { Analysis, PartnerWants, Theme, TraitKey, TraitScores, User } from "./types";
 
@@ -74,68 +74,70 @@ export function ruleCatalog(): Theme[] {
 }
 
 /**
- * 한 세션에 모인 사람들을 GROUP_MIN~GROUP_MAX명 그룹으로 고르게 나눕니다.
- * 그룹 안의 모든 쌍이 서로의 조건(머리 길이·깁텍·문담피)에 맞도록 합니다.
+ * 한 세션에 모인 사람들을 GROUP_MIN~GROUP_MAX명 그룹으로 나눕니다.
+ * 그룹 안에서는 서로 원하는 쌍끼리만 1:1로 대화하고, 각자 최소 MIN_PARTNERS명과 대화할 수 있어야 해요.
+ * 대화할 수 있는 쌍이 많고, 원하는 상대 성향이 잘 맞도록 배정해요.
  */
 export function balancedPack(list: User[]): { chunks: User[][]; leftovers: User[] } {
-  // 조건이 맞는 사람이 (최소 인원 - 1)명도 안 되는 사람은 이번 세션에 넣을 수 없어요.
-  const hopeless = list.filter((u) => list.filter((o) => o !== u && compatible(u, o)).length < GROUP_MIN - 1);
+  // 이번 세션에서 대화 상대가 모자란 사람은 미리 빼요.
+  const hopeless = list.filter((u) => partnersIn(u, list) < MIN_PARTNERS());
   const pool = list.filter((u) => !hopeless.includes(u));
   if (pool.length < GROUP_MIN) return { chunks: [], leftovers: list };
 
   const n = Math.ceil(pool.length / GROUP_MAX);
   const target = Math.max(GROUP_MIN, Math.ceil(pool.length / n));
-  // 조건이 까다로운 사람부터, 서로 원하는 성향이 잘 맞는 그룹에 배정합니다.
-  const order = orderByConstraint(pool);
-  let chunks: User[][] = order.slice(0, n).map((u) => [u]);
+  // 대화 상대가 적은(까다로운) 사람부터, 대화할 수 있는 사람이 많은 그룹으로
+  const order = [...pool].sort((a, b) => partnersIn(a, pool) - partnersIn(b, pool));
+  let chunks: User[][] = [];
   let rest: User[] = [];
-  for (const u of order.slice(n)) {
-    const best = bestHome(chunks, u, target);
-    if (best) best.push(u);
+  for (const u of order) {
+    const home = bestHome(chunks, u, target, 1);
+    if (home) home.push(u);
+    else if (chunks.length < n) chunks.push([u]);
     else rest.push(u);
   }
-
-  // 인원이 모자란 그룹은 풀어서 남은 사람과 함께 다시 배치합니다.
-  rest = [...rest, ...chunks.filter((c) => c.length < GROUP_MIN).flat()];
-  chunks = chunks.filter((c) => c.length >= GROUP_MIN);
-  const again: User[] = [];
-  for (const u of orderByConstraint(rest)) {
-    const best = bestHome(chunks, u, GROUP_MAX);
-    if (best) best.push(u);
-    else again.push(u);
+  // 대화 상대가 모자란 사람을 빼고, 인원이 모자란 그룹은 풀어요.
+  const kept: User[][] = [];
+  for (const c of chunks) {
+    const p = prune(c, GROUP_MIN);
+    if (p) {
+      kept.push(p);
+      rest.push(...c.filter((u) => !p.includes(u)));
+    } else rest.push(...c);
   }
-  // 그래도 남은 사람들끼리 새 그룹을 만들 수 있으면 만듭니다.
-  const extra = packCompatible(orderByConstraint(again), GROUP_MIN, GROUP_MAX);
-  const all = [...chunks, ...extra.chunks];
-  // 마지막으로, 남은 사람을 자리가 남은 그룹에 한 번 더 넣어 봅니다.
-  const leftovers: User[] = [];
-  for (const u of extra.leftovers) {
-    const best = bestHome(all, u, GROUP_MAX);
-    if (best) best.push(u);
-    else leftovers.push(u);
+  chunks = kept;
+  // 남은 사람은 최소 인원만큼 대화할 수 있는 그룹에 넣어 보고, 그래도 남으면 그 사람들끼리 새 그룹을 찾아요.
+  for (let guard = 0; guard < 20 && rest.length; guard++) {
+    const still: User[] = [];
+    for (const u of rest) {
+      const home = bestHome(chunks, u, GROUP_MAX, MIN_PARTNERS());
+      if (home) home.push(u);
+      else still.push(u);
+    }
+    rest = still;
+    const g = bestGroup(rest, GROUP_MIN, GROUP_MAX);
+    if (!g) break;
+    chunks.push(g);
+    rest = rest.filter((u) => !g.includes(u));
   }
-  return { chunks: all, leftovers: [...hopeless, ...leftovers] };
+  return { chunks, leftovers: [...hopeless, ...rest] };
 }
 
-/** 자리가 있고 모두와 조건이 맞는 그룹 중, 원하는 성향이 가장 잘 맞는 그룹 */
-function bestHome(chunks: User[][], u: User, cap: number) {
+/** 자리가 있고 이 사람이 minPartners명 이상과 대화할 수 있는 그룹 중, 대화 쌍과 원하는 성향 궁합이 가장 좋은 그룹 */
+function bestHome(chunks: User[][], u: User, cap: number, minPartners: number) {
   let best: User[] | null = null;
   let bestScore = -1;
   for (const c of chunks) {
-    if (c.length >= cap || !c.every((m) => compatible(m, u))) continue;
-    const score = c.reduce((sum, m) => sum + pairScore(m, u), 0) / c.length;
+    if (c.length >= cap) continue;
+    const partners = c.filter((m) => canMeet(m, u));
+    if (partners.length < minPartners) continue;
+    const score = partners.length * 10 + partners.reduce((sum, m) => sum + pairScore(m, u), 0);
     if (score > bestScore) {
       best = c;
       bestScore = score;
     }
   }
   return best;
-}
-
-/** 다른 사람과 조건이 안 맞는 경우가 많은 사람을 앞에 둡니다. */
-function orderByConstraint(list: User[]) {
-  const blocked = new Map(list.map((u) => [u.id, list.filter((o) => o !== u && !compatible(u, o)).length]));
-  return [...list].sort((a, b) => blocked.get(b.id)! - blocked.get(a.id)!);
 }
 
 /** a가 원하는 상대 성향에 b가 얼마나 가까운지 (0~1). 원하는 게 없으면 0.5 */
