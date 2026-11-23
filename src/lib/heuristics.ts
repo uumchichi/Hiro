@@ -110,7 +110,7 @@ export function ruleGroups(users: User[], themes: Theme[]) {
   const split = (themeId: string, list: User[]): User[] => {
     const theme = themes.find((t) => t.id === themeId)!;
     // 성향이 비슷한 사람끼리 이웃하도록 에너지 점수로 정렬한 뒤,
-    // 머리 길이·텍깁·문담피 조건이 모든 쌍에서 맞도록 묶습니다.
+    // 머리 길이·깁텍·문담피 조건이 모든 쌍에서 맞도록 묶습니다.
     list.sort((a, b) => (a.analysis?.traits.energy ?? 50) - (b.analysis?.traits.energy ?? 50));
     const { chunks, leftovers } = packCompatible(list, GROUP_MIN, GROUP_MAX);
     for (const c of chunks) {

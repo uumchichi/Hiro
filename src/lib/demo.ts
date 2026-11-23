@@ -49,7 +49,7 @@ export function makeDemoUser(i: number): User {
     matchTraits: {
       hair: pick([...HAIR]),
       tg: Math.random() < 0.12 ? null : Math.floor(Math.random() * 11),
-      showTg: true,
+      showTg: Math.random() < 0.4,
       tattoo: Math.random() < 0.2,
       smoke: Math.random() < 0.15,
       piercing: Math.random() < 0.3,

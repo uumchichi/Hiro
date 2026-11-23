@@ -6,7 +6,7 @@ import { useHiro } from "@/components/useHiro";
 import { DEFAULT_PREFS, HAIR, tgColor, tgLabel, type Hair, type MatchPrefs, type MatchTraits } from "@/lib/compat";
 import { REGIONS, TAG_GROUPS } from "@/lib/questions";
 
-const DEFAULT_TRAITS: MatchTraits = { hair: "단머", tg: 5, showTg: true, tattoo: false, smoke: false, piercing: false };
+const DEFAULT_TRAITS: MatchTraits = { hair: "단머", tg: 5, showTg: false, tattoo: false, smoke: false, piercing: false };
 
 function Seg<T extends string | boolean>({ value, options, onChange }: { value: T; options: { v: T; label: string }[]; onChange: (v: T) => void }) {
   return (
@@ -88,14 +88,14 @@ export default function StartPage() {
       <div className="card space-y-6">
         <div>
           <h2 className="text-lg font-bold">나의 만남 성향</h2>
-          <p className="text-sm text-muted">매칭에만 쓰이고, 텍깁은 공개 여부를 고를 수 있어요.</p>
+          <p className="text-sm text-muted">AI 매칭에는 항상 쓰여요. 깁텍은 기본적으로 <b>비공개</b>이고, 원하면 공개할 수 있어요.</p>
         </div>
         <div>
           <p className="label">머리 길이</p>
           <Seg value={mt.hair} options={HAIR.map((h) => ({ v: h, label: h }))} onChange={(hair) => setMt({ ...mt, hair })} />
         </div>
         <div>
-          <p className="label">텍깁</p>
+          <p className="label">깁텍</p>
           <label className="mb-3 flex items-center gap-2 text-[15px]">
             <input type="checkbox" className="h-5 w-5 accent-[var(--brand)]" checked={mt.tg === null} onChange={(e) => setMt({ ...mt, tg: e.target.checked ? null : 5 })} />
             플라토닉이에요
@@ -116,7 +116,7 @@ export default function StartPage() {
                 onChange={(e) => setMt({ ...mt, tg: Number(e.target.value) })}
                 className="tg-range w-full"
                 style={{ ["--thumb" as string]: tgColor(mt.tg) }}
-                aria-label="텍깁"
+                aria-label="깁텍"
               />
               <div className="flex justify-between text-xs text-muted">
                 <span>0 온텍</span>
@@ -125,9 +125,12 @@ export default function StartPage() {
               </div>
             </div>
           )}
-          <label className="mt-3 flex items-center gap-2 text-sm text-muted">
-            <input type="checkbox" className="h-4 w-4 accent-[var(--brand)]" checked={mt.showTg} onChange={(e) => setMt({ ...mt, showTg: e.target.checked })} />
-            같은 그룹 사람들에게 텍깁 보여주기
+          <label className="mt-3 flex items-start gap-2 text-sm text-muted">
+            <input type="checkbox" className="mt-0.5 h-4 w-4 accent-[var(--brand)]" checked={mt.showTg} onChange={(e) => setMt({ ...mt, showTg: e.target.checked })} />
+            <span>
+              내 깁텍을 다른 사람에게 공개하기 (선택)
+              <span className="block text-xs">공개하지 않아도 AI가 서로 맞는 사람끼리 매칭해요. 다른 사람에게는 보이지 않아요.</span>
+            </span>
           </label>
         </div>
         <div>
@@ -162,7 +165,7 @@ export default function StartPage() {
           </div>
         </div>
         <div>
-          <p className="label">텍깁</p>
+          <p className="label">깁텍</p>
           <Seg
             value={pf.platonic}
             options={[

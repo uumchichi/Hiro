@@ -1,4 +1,4 @@
-// 만남 성향(머리 길이, 텍깁, 문담피)과 원하는 상대 조건, 양방향 궁합 판정
+// 만남 성향(머리 길이, 깁텍, 문담피)과 원하는 상대 조건, 양방향 궁합 판정
 import type { User } from "./types";
 
 export const HAIR = ["숏컷", "숏단", "단머", "중단", "긴머"] as const;
@@ -7,7 +7,7 @@ export type Hair = (typeof HAIR)[number];
 export interface MatchTraits {
   hair: Hair;
   tg: number | null; // 0 = 온텍, 10 = 온깁, null = 플라토닉
-  showTg: boolean; // 그룹 멤버에게 텍깁을 보여줄지
+  showTg: boolean; // 다른 사람에게 깁텍을 공개할지 (기본 비공개). 매칭에는 공개 여부와 상관없이 쓰입니다.
   tattoo: boolean;
   smoke: boolean;
   piercing: boolean;

@@ -48,7 +48,7 @@ export default function Home() {
       <section className="card space-y-4">
         <div>
           <h2 className="text-lg font-bold">히로 스펙트럼</h2>
-          <p className="text-sm text-muted">텍깁 성향은 색으로 보여요. 같은 그룹 사람들의 배지 색으로 서로의 성향을 한눈에 알 수 있어요.</p>
+          <p className="text-sm text-muted">깁텍 성향은 색으로 표현돼요. 깁텍은 기본 비공개이고, 공개한 사람만 배지 색으로 보여요. 공개하지 않아도 AI가 서로 맞는 사람끼리 매칭해요.</p>
         </div>
         <div className="flex h-3 overflow-hidden rounded-full">
           <div className="w-[14%]" style={{ background: SPECTRUM.platonic }} />
