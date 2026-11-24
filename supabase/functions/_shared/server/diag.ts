@@ -1,7 +1,7 @@
 // 서버 점검: 어디서 얼마나 걸리고 어디서 실패하는지 한 번에 보여줘요 (운영자 전용, 비밀값은 보여주지 않아요).
 import { env } from "../env.ts";
 import { db, tx } from "./db.ts";
-import { loadWorld } from "./world-db.ts";
+import { loadWorld, saveWorld } from "./world-db.ts";
 import { inWorld } from "./world-tx.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -32,12 +32,15 @@ function dbTarget() {
   }
 }
 
-export async function runDiag() {
+class Rollback extends Error {}
+
+/** publicView: 키 없이 여는 점검용. 설정 여부·DB 주소 같은 내부 정보는 빼고, 단계별 결과만 보여줘요. */
+export async function runDiag(publicView = false) {
   const out: Record<string, unknown> = {
     time: new Date().toISOString(),
     deno: Deno.version.deno,
     memoryAtStart: memory(),
-    env: {
+    env: publicView ? undefined : {
       SUPABASE_URL: Boolean(env("SUPABASE_URL")),
       SUPABASE_DB_URL: dbTarget(),
       HIRO_ADMIN_KEY: Boolean(env("HIRO_ADMIN_KEY")),
@@ -74,6 +77,27 @@ export async function runDiag() {
     }));
   await stage("5_load_and_save", async () => {
     await inWorld(() => null);
+  });
+  // 로그인 확인에 쓰는 Supabase 공개키 목록 (공개 정보)
+  await stage("6_jwks", async () => {
+    const base = env("SUPABASE_URL");
+    if (!base) throw new Error("SUPABASE_URL 이 없어요");
+    const r = await fetch(`${base}/auth/v1/.well-known/jwks.json`);
+    const j = await r.json().catch(() => null);
+    return { httpStatus: r.status, keyCount: j?.keys?.length ?? 0, algs: (j?.keys ?? []).map((k: { alg?: string }) => k.alg) };
+  });
+  // 새 사용자를 저장하는 길을 그대로 지나가 보고, 마지막에 되돌려요 (아무것도 남지 않아요).
+  await stage("7_write_probe_rolled_back", async () => {
+    try {
+      await tx(async (t) => {
+        const loaded = await loadWorld(t);
+        loaded.db.users["u_diagprobe0"] = { id: "u_diagprobe0", createdAt: Date.now(), isDemo: false, status: "new" };
+        await saveWorld(t, loaded);
+        throw new Rollback();
+      });
+    } catch (err) {
+      if (!(err instanceof Rollback)) throw err;
+    }
   });
   out.memoryAtEnd = memory();
   return out;

@@ -13,6 +13,7 @@ import {
   postAdminSlot,
   postAdminWallet,
   getDiag,
+  getPublicDiag,
   postCatalog,
   postEvent,
   postReset,
@@ -43,7 +44,7 @@ export interface Ctx {
   user: User;
 }
 
-type Access = "user" | "admin" | "cron";
+type Access = "user" | "admin" | "cron" | "public";
 
 type Handler = (ctx: Ctx) => Promise<unknown>;
 
@@ -71,6 +72,7 @@ const ROUTES: [string, Handler, Access?][] = [
   ["POST /voice/token", postVoiceToken],
   ["GET /admin/overview", getOverview, "admin"],
   ["GET /admin/diag", getDiag, "admin"],
+  ["GET /diag", getPublicDiag, "public"],
   ["POST /admin/seed", postSeed, "admin"],
   ["POST /admin/lobby", postAdminLobby, "admin"],
   ["POST /admin/slot", postAdminSlot, "admin"],

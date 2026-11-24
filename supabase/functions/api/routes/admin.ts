@@ -16,6 +16,11 @@ export function getDiag() {
   return runDiag();
 }
 
+/** 키 없이 브라우저 주소창에서 열어 볼 수 있는 점검 (내부 설정 정보는 빼고 단계별 결과만). 문제를 고친 뒤에는 없앨 거예요. */
+export function getPublicDiag() {
+  return runDiag(true);
+}
+
 export async function getOverview() {
   await runTick();
   return inWorld(() => adminOverview());

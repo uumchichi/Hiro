@@ -27,6 +27,23 @@ Deno.test({ name: "서버 점검: 운영자 키가 있어야 하고, 단계별 �
   assert(!JSON.stringify(r.body).includes(ADMIN) && !JSON.stringify(r.body).includes("testpw"), "비밀값은 보이지 않아요");
 } });
 
+Deno.test({ name: "키 없는 점검(/diag): 단계별 결과만 보이고 내부 설정은 숨겨요, 아무것도 남기지 않아요", ...opts, fn: async () => {
+  const [{ before }] = await db()`select count(*)::int as before from users`;
+  const r = await call("GET", "/diag");
+  assert(r.status === 200, "키 없이 200");
+  for (const k of ["1_ping", "2_transaction_lock", "3_tables", "4_load_world", "5_load_and_save", "7_write_probe_rolled_back"]) {
+    assert(r.body[k]?.ok === true, `${k} 성공 ` + JSON.stringify(r.body[k]));
+  }
+  assert(r.body["6_jwks"] && "ok" in r.body["6_jwks"], "jwks 단계가 있어요");
+  assert(r.body.env === undefined, "내부 설정 정보는 숨겨요");
+  const text = JSON.stringify(r.body);
+  assert(!text.includes("testpw") && !text.includes(ADMIN) && !text.includes("localhost"), "비밀값·주소가 보이지 않아요");
+  const [{ after }] = await db()`select count(*)::int as after from users`;
+  assert(before === after, "점검이 사용자를 남기지 않아요 (되돌림)");
+  const [{ n }] = await db()`select count(*)::int as n from users where id = 'u_diagprobe0'`;
+  assert(n === 0, "점검용 사용자가 남아 있지 않아요");
+} });
+
 Deno.test({ name: "오류 이유는 운영자 키가 있는 요청에만 보여요", ...opts, fn: async () => {
   const uid = crypto.randomUUID();
   const user = { "x-test-auth-id": uid };
