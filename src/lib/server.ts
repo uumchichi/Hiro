@@ -17,17 +17,28 @@ export async function currentUserId(): Promise<string | null> {
   return readDb().users[id] ? id : null;
 }
 
-/** 쿠키의 사용자를 가져오고, 없으면 새로 만듭니다. */
+const ID_FORMAT = /^u_[0-9a-f]{12}$/;
+
+/**
+ * 쿠키의 사용자를 가져오고, 없으면 그 쿠키 ID로 만듭니다.
+ * 쿠키는 미들웨어가 첫 요청 때 한 번만 정하므로, 동시에 온 요청들도 같은 사용자를 가리켜요.
+ */
 export async function ensureUser(): Promise<User> {
-  const existing = await currentUserId();
-  if (existing) return readDb().users[existing];
+  const jar = await cookies();
+  const cookieId = jar.get(COOKIE)?.value;
+  if (cookieId && readDb().users[cookieId]) return readDb().users[cookieId];
+  const validId = cookieId && ID_FORMAT.test(cookieId) ? cookieId : null;
   const user = mutate((db) => {
-    const u: User = { id: newId("u"), createdAt: Date.now(), isDemo: false, status: "new" };
+    const id = validId ?? newId("u");
+    // 동시에 온 다른 요청이 이미 만들었으면 그 사용자를 써요.
+    if (db.users[id]) return db.users[id];
+    const u: User = { id, createdAt: Date.now(), isDemo: false, status: "new" };
     db.users[u.id] = u;
     return u;
   });
-  const jar = await cookies();
-  jar.set(COOKIE, user.id, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 30 });
+  if (user.id !== cookieId) {
+    jar.set(COOKIE, user.id, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 30 });
+  }
   return user;
 }
 
