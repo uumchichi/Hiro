@@ -5,6 +5,7 @@ import { ALL_TAGS, REGIONS } from "@/lib/questions";
 import { ALL_CELLS } from "@/lib/schedule";
 import { ensureUser, viewState } from "@/lib/server";
 import { mutate } from "@/lib/store";
+import { ensureWallet } from "@/lib/wallet";
 
 const Body = z.object({
   nickname: z.string().trim().min(1).max(12),
@@ -46,6 +47,7 @@ export async function POST(req: Request) {
     u.matchTraits = { ...parsed.data.matchTraits, smoke: habits.smoke, tattoo: habits.tattoo, piercing: habits.piercing };
     u.prefs = { ...(u.prefs ? normalizePrefs(u.prefs) : DEFAULT_PREFS), ...parsed.data.prefs };
     if (u.status === "new") u.status = "profiled";
+    ensureWallet(db, u.id); // 신규 가입 선물: 입장권 + 직진러의 증표
   });
   return NextResponse.json(viewState(user.id));
 }

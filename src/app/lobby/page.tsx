@@ -143,6 +143,9 @@ export default function LobbyPage() {
               <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-[#5dffb0]" />
               지금 대기실 {view.online}명
             </span>
+            <Link href="/wallet" className="inline-flex items-center rounded-full bg-white/20 px-3 py-1.5 text-sm font-semibold backdrop-blur hover:bg-white/30">
+              🎟️ 입장권 {view.tickets}장
+            </Link>
             {view.inLobby ? (
               <button className="btn border border-white/50 py-2 text-sm text-white hover:bg-white/10" disabled={busy} onClick={() => send("/api/lobby", { action: "leave" })}>
                 잠깐 쉬기
@@ -158,7 +161,16 @@ export default function LobbyPage() {
 
       {view.note && <p className="rounded-2xl bg-brand-soft px-4 py-3 text-sm font-semibold">💌 {view.note}</p>}
       {view.priority > 0 && view.inLobby && <p className="text-sm text-muted">⭐ 우선권 {view.priority}개: 다음 초대장을 먼저 받아요.</p>}
-      {err && <p className="text-sm font-semibold text-brand">{err}</p>}
+      {err && (
+        <p className="rounded-2xl bg-brand-soft px-4 py-3 text-sm font-semibold">
+          {err}{" "}
+          {err.includes("입장권") && (
+            <Link href="/wallet" className="text-brand underline">
+              내 지갑 열기
+            </Link>
+          )}
+        </p>
+      )}
 
       {(view.scheduled.length > 0 || view.reservations.length > 0 || !view.hasAvailability) && (
         <section className="card space-y-4">

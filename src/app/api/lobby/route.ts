@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { joinLobby, leaveLobby, lobbyView, pingLobby, processLobby, setInterests } from "@/lib/lobby";
 import { ensureUser } from "@/lib/server";
+import { readDb } from "@/lib/store";
+import { available as walletAvailable } from "@/lib/wallet";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +27,9 @@ export async function POST(req: Request) {
   if (!user.analysis) return NextResponse.json({ error: "성향 검사를 먼저 해 주세요." }, { status: 400 });
   if (user.status === "grouped") return NextResponse.json({ error: "이미 대화 중이에요." }, { status: 409 });
   const { action, interests } = parsed.data;
+  if (action === "join" && walletAvailable(readDb(), user.id, "ticket") < 1) {
+    return NextResponse.json({ error: "입장권이 필요해요. 내 지갑에서 도키로 바꿀 수 있어요.", needTicket: true, ...lobbyView(user.id) }, { status: 402 });
+  }
   if (action === "join") joinLobby(user.id, interests);
   else if (action === "leave") leaveLobby(user.id);
   else setInterests(user.id, interests ?? []);

@@ -6,7 +6,9 @@ import type { ViewState } from "@/lib/server";
 export type { ViewState };
 
 /** 서버의 내 상태를 가져오고, pollMs가 있으면 주기적으로 갱신합니다. */
-export function useHiro(pollMs?: number) {
+/** presence: 대화방 화면에서 true로 두면 1:1 대화가 이어지는지 서버에 알려요 (입장권 차감 기준). */
+export function useHiro(pollMs?: number, opts?: { presence?: boolean }) {
+  const presence = Boolean(opts?.presence);
   const [state, setState] = useState<ViewState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const offset = useRef(0); // 서버 시각 - 내 시각
@@ -18,12 +20,12 @@ export function useHiro(pollMs?: number) {
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch("/api/state", { cache: "no-store" });
+      const res = await fetch(presence ? "/api/state?presence=1" : "/api/state", { cache: "no-store" });
       if (res.ok) apply(await res.json());
     } catch {
       /* 다음 폴링에서 재시도 */
     }
-  }, [apply]);
+  }, [apply, presence]);
 
   useEffect(() => {
     refresh();

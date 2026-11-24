@@ -1,6 +1,7 @@
 // 그룹 만들기 (테마 세션과 AI 초대장이 함께 씁니다)
 import { defaultIcebreakers } from "./heuristics";
 import { canMeet } from "./meet";
+import { hold } from "./wallet";
 import { buildRotation } from "./rotation";
 import { newId } from "./store";
 import type { DB, Group, Theme } from "./types";
@@ -32,6 +33,10 @@ export function createGroup(
   };
   db.groups[group.id] = group;
   for (const id of opts.memberIds) {
+    // 입장권은 맡아 두기만 해요. 첫 1:1 대화가 이어지면 차감되고, 성사되지 않으면 끝날 때 돌려줘요.
+    if (!hold(db, id, "ticket", `group:${group.id}`, `'${group.theme.title}' 로테이션 입장권 맡김`)) {
+      console.warn("[groups] no ticket to hold for", id);
+    }
     db.users[id].status = "grouped";
     db.users[id].groupId = group.id;
     delete db.lobby?.[id]; // 그룹에 들어가면 대기실에서 나갑니다.

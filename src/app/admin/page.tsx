@@ -58,6 +58,9 @@ export default function AdminPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [testRound, setTestRound] = useState(60);
+  const [grantCode, setGrantCode] = useState("");
+  const [grantItem, setGrantItem] = useState<"doki" | "ticket" | "badge">("doki");
+  const [grantAmount, setGrantAmount] = useState(100);
   useTick();
 
   useEffect(() => {
@@ -92,7 +95,7 @@ export default function AdminPage() {
     const d = await res.json().catch(() => ({}));
     setBusy(null);
     if (!res.ok) setMsg(d.error ?? "실패했어요.");
-    else if (d.note) setMsg(`🤖 ${d.note}`);
+    else if (d.note) setMsg(url.includes("/catalog") ? `🤖 ${d.note}` : d.note);
     else if (done) setMsg(done);
     load();
   }
@@ -131,6 +134,27 @@ export default function AdminPage() {
       )}
 
       {msg && <p className="rounded-2xl bg-brand-soft px-4 py-3 text-sm font-semibold">{msg}</p>}
+
+      <section className="card space-y-3">
+        <h2 className="text-lg font-bold">🎟️ 도키 · 입장권 지급</h2>
+        <p className="text-sm text-muted">결제 연결 전이라 운영자가 지급해요. 사용자 ID(닉네임 옆 #코드)로 지급하고, 사용자의 내 지갑 내역에 남아요.</p>
+        <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto_auto]">
+          <input className="input font-mono uppercase" placeholder="ID (예: K7M2Q)" maxLength={6} value={grantCode} onChange={(e) => setGrantCode(e.target.value)} />
+          <select className="input" value={grantItem} onChange={(e) => setGrantItem(e.target.value as "doki" | "ticket" | "badge")}>
+            <option value="doki">도키</option>
+            <option value="ticket">입장권</option>
+            <option value="badge">직진러의 증표</option>
+          </select>
+          <input type="number" className="input w-28" min={1} value={grantAmount} onChange={(e) => setGrantAmount(Math.max(1, Number(e.target.value) || 1))} />
+          <button
+            className="btn-primary"
+            disabled={!!busy || grantCode.trim().length < 4}
+            onClick={() => call("/api/admin/wallet", { code: grantCode, item: grantItem, amount: grantAmount, note: "운영자 지급" }, "grant")}
+          >
+            지급하기
+          </button>
+        </div>
+      </section>
 
       {data && (
         <section className="card space-y-3">

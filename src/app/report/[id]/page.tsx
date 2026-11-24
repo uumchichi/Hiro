@@ -20,6 +20,7 @@ interface Report {
   straight: {
     sent: { to: PublicMember; message: string; status: "pending" | "accepted" | "missed"; chatId: string | null } | null;
     stage: "rotation" | "need_reveal" | "matched" | "open" | "used";
+    badges: number;
     candidates: PublicMember[];
     received: {
       from: PublicMember;
@@ -221,7 +222,15 @@ export default function ReportPage() {
               {straightTo && (
                 <>
                   <input className="input text-sm" maxLength={100} placeholder="한마디 남기기 (선택)" value={straightMsg} onChange={(e) => setStraightMsg(e.target.value)} />
-                  <button className="btn-primary w-full" onClick={() => setStraightConfirm(true)}>
+                  <p className="text-xs text-muted">
+                    💘 직진러의 증표 {r.straight.badges}개 · 상대가 수락하면 1개가 사용되고, 이어지지 않으면 돌려드려요.{" "}
+                    {r.straight.badges < 1 && (
+                      <Link href="/wallet" className="font-semibold text-brand underline">
+                        도키로 바꾸기
+                      </Link>
+                    )}
+                  </p>
+                  <button className="btn-primary w-full" disabled={r.straight.badges < 1} onClick={() => setStraightConfirm(true)}>
                     💘 직진하기
                   </button>
                 </>

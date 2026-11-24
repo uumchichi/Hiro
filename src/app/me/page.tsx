@@ -78,6 +78,7 @@ export default function MePage() {
         <Link href={state.user.status === "grouped" ? "/room" : "/lobby"} className="btn-primary">
           {state.user.status === "grouped" ? "대화방으로 가기" : "대기실 입장하기"}
         </Link>
+        <Link href="/wallet" className="btn-ghost">🎟️ 내 지갑</Link>
         <Link href="/quiz" className="btn-ghost">검사 다시 하기</Link>
         <Link href="/start" className="btn-ghost">프로필 수정</Link>
       </div>

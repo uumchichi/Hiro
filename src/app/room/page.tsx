@@ -14,7 +14,7 @@ const OrbPreview = dynamic(() => import("@/components/OrbPreview"), { ssr: false
 
 export default function RoomPage() {
   const router = useRouter();
-  const { state, serverNow } = useHiro(2000);
+  const { state, serverNow } = useHiro(2000, { presence: true });
   useTick();
 
   const group = state?.group;
@@ -77,6 +77,13 @@ export default function RoomPage() {
           )}
         </p>
       </div>
+      {state.wallet?.groupTicket && (
+        <p className="text-xs text-muted">
+          {state.wallet.groupTicket === "used"
+            ? "🎟️ 1:1 대화가 성사돼 입장권 1장을 사용했어요."
+            : "🎟️ 입장권은 맡아 두기만 했어요. 첫 1:1 대화가 이어지면 그때 사용되고, 성사되지 않으면 돌려드려요."}
+        </p>
+      )}
       <div className="h-2 overflow-hidden rounded-full bg-line">
         <div className="h-full bg-hiro" style={{ width: `${((roundNo - (phase.kind === "talk" ? 1 : 0)) / group.roundCount) * 100}%` }} />
       </div>

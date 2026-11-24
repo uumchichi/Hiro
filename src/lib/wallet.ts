@@ -1,0 +1,145 @@
+// 도키 지갑: 도키를 🎟️ 입장권 / 💘 직진러의 증표로 바꿔 써요.
+// · 입장권: 로테이션 1회에 1장. 그룹에 들어가면 맡아 두고, 첫 1:1 대화가 실제로 이어졌을 때 차감해요.
+//   대화가 성사되지 않으면(오류, 상대 없음, 시작 전 이탈) 로테이션이 끝날 때 돌려줘요.
+// · 직진러의 증표: 직진 1회에 1개. 보낼 때 맡아 두고, 상대가 수락하면 차감, 거절·만료면 돌려줘요.
+import { mutate, newId, readDb } from "./store";
+import type { DB, User, Wallet, WalletItem } from "./types";
+
+export const PRICE = {
+  ticket: () => Number(process.env.HIRO_TICKET_DOKI ?? 10),
+  badge: () => Number(process.env.HIRO_BADGE_DOKI ?? 30),
+};
+export const STARTER = {
+  tickets: () => Number(process.env.HIRO_STARTER_TICKETS ?? 3),
+  badges: () => Number(process.env.HIRO_STARTER_BADGES ?? 1),
+};
+/** 첫 1:1 대화가 이만큼 이어지면 입장권을 차감해요. */
+export const TICKET_AFTER_MS = () => Number(process.env.HIRO_TICKET_AFTER_SECONDS ?? 30) * 1000;
+
+/** 충전 상품 (결제 연결 전이라 화면에만 보여요) */
+export const DOKI_PACKS = [
+  { doki: 50, price: 4900, bonus: 0 },
+  { doki: 120, price: 9900, bonus: 20 },
+  { doki: 300, price: 22000, bonus: 35 },
+];
+
+function log(db: DB, userId: string, kind: DB["ledger"][number]["kind"], item: WalletItem, amount: number, note: string, ref?: string) {
+  db.ledger.push({ id: newId("tx"), userId, at: Date.now(), kind, item, amount, note, ref });
+}
+
+/** 지갑이 없으면 만들고 신규 가입 선물을 줘요. 데모 참가자는 지갑을 쓰지 않아요. mutate() 안에서 호출하세요. */
+export function ensureWallet(db: DB, userId: string): Wallet | null {
+  const u = db.users[userId];
+  if (!u || u.isDemo) return null;
+  if (!u.wallet) {
+    u.wallet = { freeDoki: 0, paidDoki: 0, tickets: STARTER.tickets(), badges: STARTER.badges(), holds: {} };
+    if (STARTER.tickets()) log(db, userId, "starter", "ticket", STARTER.tickets(), "가입 선물");
+    if (STARTER.badges()) log(db, userId, "starter", "badge", STARTER.badges(), "가입 선물");
+  }
+  return u.wallet;
+}
+
+function held(w: Wallet, item: "ticket" | "badge") {
+  return Object.values(w.holds).filter((h) => h.item === item).length;
+}
+
+/** 지금 쓸 수 있는 개수 (맡아 둔 것 제외). 데모는 항상 충분해요. */
+export function available(db: DB, userId: string, item: "ticket" | "badge") {
+  const u = db.users[userId];
+  if (u?.isDemo) return Infinity;
+  const w = u?.wallet;
+  if (!w) return item === "ticket" ? STARTER.tickets() : STARTER.badges(); // 아직 지갑이 없으면 가입 선물만큼
+  return (item === "ticket" ? w.tickets : w.badges) - held(w, item);
+}
+
+/** 아이템을 맡아 둬요 (차감 전). 이미 같은 ref로 맡아 뒀으면 그대로 둬요. */
+export function hold(db: DB, userId: string, item: "ticket" | "badge", ref: string, note: string): boolean {
+  const w = ensureWallet(db, userId);
+  if (!w) return true; // 데모
+  if (w.holds[ref]) return true;
+  if (available(db, userId, item) < 1) return false;
+  w.holds[ref] = { item, at: Date.now() };
+  log(db, userId, "hold", item, 0, note, ref);
+  return true;
+}
+
+/** 맡아 둔 아이템을 실제로 써요. */
+export function consume(db: DB, userId: string, ref: string, note: string) {
+  const w = db.users[userId]?.wallet;
+  const h = w?.holds[ref];
+  if (!w || !h) return false;
+  delete w.holds[ref];
+  if (h.item === "ticket") w.tickets -= 1;
+  else w.badges -= 1;
+  log(db, userId, "use", h.item, -1, note, ref);
+  return true;
+}
+
+/** 맡아 둔 아이템을 돌려줘요. */
+export function release(db: DB, userId: string, ref: string, note: string) {
+  const w = db.users[userId]?.wallet;
+  const h = w?.holds[ref];
+  if (!w || !h) return false;
+  delete w.holds[ref];
+  log(db, userId, "release", h.item, 0, note, ref);
+  return true;
+}
+
+/** 도키로 입장권·증표를 미리 바꿔 둬요. 무료 도키부터 써요. */
+export function exchange(userId: string, item: "ticket" | "badge", count: number): string | null {
+  return mutate((db) => {
+    const w = ensureWallet(db, userId);
+    if (!w) return "지갑을 쓸 수 없어요.";
+    const cost = (item === "ticket" ? PRICE.ticket() : PRICE.badge()) * count;
+    if (w.freeDoki + w.paidDoki < cost) return `도키가 모자라요. (${cost}도키 필요)`;
+    const fromFree = Math.min(w.freeDoki, cost);
+    w.freeDoki -= fromFree;
+    w.paidDoki -= cost - fromFree;
+    if (item === "ticket") w.tickets += count;
+    else w.badges += count;
+    const name = item === "ticket" ? "입장권" : "직진러의 증표";
+    log(db, userId, "exchange", "doki", -cost, `${name} ${count}개로 바꿈`);
+    log(db, userId, "exchange", item, count, `${cost}도키로 바꿈`);
+    return null;
+  });
+}
+
+/** 운영자 지급 (결제 연결 전 테스트·이벤트용). 도키는 무료 도키로 들어가요. */
+export function grant(userId: string, item: WalletItem, amount: number, note: string) {
+  mutate((db) => {
+    const w = ensureWallet(db, userId);
+    if (!w) return;
+    if (item === "doki") w.freeDoki += amount;
+    else if (item === "ticket") w.tickets += amount;
+    else w.badges += amount;
+    log(db, userId, "grant", item, amount, note);
+  });
+}
+
+export function walletView(userId: string) {
+  mutate((db) => {
+    ensureWallet(db, userId); // 예전 사용자도 처음 열 때 가입 선물을 받아요
+  });
+  const db = readDb();
+  const u = db.users[userId] as User;
+  const w = u.wallet!;
+  return {
+    doki: w.freeDoki + w.paidDoki,
+    freeDoki: w.freeDoki,
+    paidDoki: w.paidDoki,
+    tickets: w.tickets,
+    badges: w.badges,
+    heldTickets: held(w, "ticket"),
+    heldBadges: held(w, "badge"),
+    prices: { ticket: PRICE.ticket(), badge: PRICE.badge() },
+    ticketAfterSeconds: TICKET_AFTER_MS() / 1000,
+    packs: DOKI_PACKS,
+    history: db.ledger
+      .filter((t) => t.userId === userId && t.kind !== "hold")
+      .sort((a, b) => b.at - a.at)
+      .slice(0, 50)
+      .map((t) => ({ id: t.id, at: t.at, kind: t.kind, item: t.item, amount: t.amount, note: t.note })),
+  };
+}
+
+export type WalletView = ReturnType<typeof walletView>;

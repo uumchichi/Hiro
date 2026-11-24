@@ -35,6 +35,7 @@ export interface User {
   createdAt: number;
   isDemo: boolean;
   status: UserStatus;
+  wallet?: Wallet; // 도키 · 입장권 · 직진러의 증표
   code?: string; // 공개 ID: 숫자+영어 대문자 5글자 (예: K7M2Q). 신고할 때 씁니다.
   profile?: Profile;
   matchTraits?: MatchTraits; // 내 만남 성향
@@ -85,6 +86,8 @@ export interface Group {
   memos: Record<string, Record<string, string>>;
   // 쪽지의 주인 찾기: 한 사람당 단 한 번. reveals[찾은 사람] = 쪽지를 보낸 사람
   reveals: Record<string, string>;
+  // 라운드별 대화방 접속 기록: presence[라운드][사용자] = { first, last }
+  presence?: Record<string, Record<string, { first: number; last: number }>>;
   // 직진하기: 매칭 실패 후, 쪽지를 보낸 사람 중 1명에게 채팅 신청. straights[보낸 사람]
   straights?: Record<string, Straight>;
   finishedAt?: number;
@@ -189,6 +192,29 @@ export interface UserReport {
   status: "new" | "reviewed";
 }
 
+// ── 도키 지갑 ──
+export type WalletItem = "doki" | "ticket" | "badge"; // 도키 / 입장권 / 직진러의 증표
+
+export interface Wallet {
+  freeDoki: number; // 무료로 받은 도키 (먼저 쓰여요)
+  paidDoki: number; // 결제로 충전한 도키 (환불 대상)
+  tickets: number; // 🎟️ 입장권
+  badges: number; // 💘 직진러의 증표
+  // 맡아 둔 아이템: 아직 차감 전. key 예: "group:g_abc", "straight:g_abc"
+  holds: Record<string, { item: "ticket" | "badge"; at: number }>;
+}
+
+export interface WalletTxn {
+  id: string;
+  userId: string;
+  at: number;
+  kind: "starter" | "grant" | "charge" | "exchange" | "hold" | "use" | "release";
+  item: WalletItem;
+  amount: number; // + 받음 / - 씀
+  note: string;
+  ref?: string;
+}
+
 export interface DB {
   users: Record<string, User>;
   groups: Record<string, Group>;
@@ -199,4 +225,5 @@ export interface DB {
   invites: Record<string, Invite>;
   chats: Record<string, Chat>;
   reports: UserReport[];
+  ledger: WalletTxn[];
 }

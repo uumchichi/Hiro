@@ -11,6 +11,7 @@ import { GROUP_MAX, GROUP_MIN, pairScore } from "./heuristics";
 import { upcomingCells } from "./schedule";
 import { catalogThemes, createConfirmedSlot } from "./slots";
 import { mutate, newId, readDb } from "./store";
+import { available as walletAvailable } from "./wallet";
 import type { DB, Invite, Theme, User } from "./types";
 
 export const INVITE_TTL_MS = Number(process.env.HIRO_INVITE_SECONDS ?? 60) * 1000;
@@ -89,7 +90,13 @@ function busyWith(db: DB, kind: Kind) {
 function availableNow(db: DB, now: number) {
   const busy = busyWith(db, "now");
   return Object.keys(db.lobby).filter(
-    (id) => db.users[id] && db.users[id].status !== "grouped" && db.users[id].analysis && !busy.has(id) && isOnline(db, id, now),
+    (id) =>
+      db.users[id] &&
+      db.users[id].status !== "grouped" &&
+      db.users[id].analysis &&
+      !busy.has(id) &&
+      isOnline(db, id, now) &&
+      walletAvailable(db, id, "ticket") >= 1,
   );
 }
 
@@ -97,7 +104,7 @@ function availableNow(db: DB, now: number) {
 function availableScheduled(db: DB) {
   const busy = busyWith(db, "scheduled");
   return Object.values(db.users)
-    .filter((u) => u.analysis && u.availability?.length && !busy.has(u.id))
+    .filter((u) => u.analysis && u.availability?.length && !busy.has(u.id) && walletAvailable(db, u.id, "ticket") >= 1)
     .map((u) => u.id);
 }
 
@@ -124,6 +131,7 @@ export function respond(userId: string, inviteId: string, accept: boolean): stri
       return null;
     }
     if (inv.kind === "scheduled" && hasClash(db, userId, inv.startsAt!)) return "그 시간 근처에 이미 확정된 예약이 있어요.";
+    if (walletAvailable(db, userId, "ticket") < 1) return "입장권이 필요해요. 내 지갑에서 도키로 바꿀 수 있어요.";
     inv.accepted.push(userId);
     settle(db, inv, Date.now());
     return null;
@@ -415,6 +423,7 @@ export function lobbyView(userId: string, now = Date.now()) {
     note: me?.note ?? null,
     online: Object.keys(db.lobby).filter((id) => isOnline(db, id, now)).length,
     hasAvailability: Boolean(db.users[userId]?.availability?.length),
+    tickets: walletAvailable(db, userId, "ticket"),
     config: { min: GROUP_MIN, max: GROUP_MAX, inviteSeconds: INVITE_TTL_MS / 1000, roundSeconds: ROUND_SECONDS(), breakSeconds: BREAK_SECONDS() },
     themes: catalogThemes().map((t) => ({ id: t.id, title: t.title, emoji: t.emoji, description: t.description })),
     invite: showNow ? view(nowInv) : null,

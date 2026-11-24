@@ -4,6 +4,7 @@ import { AccessToken } from "livekit-server-sdk";
 import { mutate, newId, readDb } from "./store";
 import { mdpLabel, normalizePrefs, normalizeTraits, tgColor, tgLabel } from "./compat";
 import { finishGroup, metPartners } from "./notes";
+import { available as walletAvailable } from "./wallet";
 import { currentPhase, partnerIn, roomName } from "./rotation";
 import type { Group, User } from "./types";
 
@@ -144,6 +145,20 @@ export function viewState(userId: string) {
         .filter((g) => g.status === "done" && g.memberIds.includes(userId) && now - (g.finishedAt ?? 0) < 3600_000)
         .sort((a, b) => (b.finishedAt ?? 0) - (a.finishedAt ?? 0))[0]?.id ?? null,
     voice: { configured: livekitConfigured() },
+    wallet: user.wallet
+      ? {
+          tickets: walletAvailable(db, userId, "ticket"),
+          badges: walletAvailable(db, userId, "badge"),
+          // 지금 그룹의 입장권: 맡아 둠(아직 차감 전) / 사용됨
+          groupTicket: user.groupId
+            ? user.wallet.holds[`group:${user.groupId}`]
+              ? "held"
+              : db.ledger.some((t) => t.userId === userId && t.ref === `group:${user.groupId}` && t.kind === "use")
+                ? "used"
+                : null
+            : null,
+        }
+      : null,
   };
 }
 

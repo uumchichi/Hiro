@@ -1,5 +1,6 @@
 // 쪽지 · 메모 · 쪽지의 주인 찾기 · 24시간 채팅방
 import { currentPhase, partnerIn } from "./rotation";
+import { TICKET_AFTER_MS, available, consume, hold, release } from "./wallet";
 import { mutate, newId, readDb } from "./store";
 import type { Chat, DB, Group } from "./types";
 
@@ -64,6 +65,8 @@ export function finishGroup(db: DB, g: Group) {
   if (g.status === "done") return;
   g.status = "done";
   g.finishedAt = Date.now();
+  // 1:1 대화가 한 번도 성사되지 않은 사람의 입장권은 돌려줘요.
+  for (const id of g.memberIds) release(db, id, `group:${g.id}`, `'${g.theme.title}' 대화가 성사되지 않아 입장권을 돌려드렸어요`);
   for (const id of g.memberIds) {
     const u = db.users[id];
     if (u && u.groupId === g.id) {
@@ -183,6 +186,8 @@ export function sendStraight(userId: string, groupId: string, to: string, messag
     g.straights ??= {};
     if (!g.letters[userId]?.[to]) return "쪽지를 보낸 분에게만 직진할 수 있어요.";
     if (findChat(db, g.id, userId, to)) return "이미 채팅방이 열려 있어요.";
+    // 직진러의 증표는 맡아 두고, 상대가 수락하면 차감해요.
+    if (!hold(db, userId, "badge", `straight:${g.id}`, "직진러의 증표 맡김")) return "직진러의 증표가 필요해요.";
     const now = Date.now();
     g.straights[userId] = {
       to,
@@ -203,13 +208,16 @@ export function respondStraight(userId: string, groupId: string, from: string, a
     if (st.status !== "pending") return { error: "이미 응답했거나 시간이 지났어요." };
     if (Date.now() > st.expiresAt) {
       st.status = "expired";
+      release(db, from, `straight:${groupId}`, "직진이 이어지지 않아 증표를 돌려드렸어요");
       return { error: "24시간이 지나 신청이 만료됐어요." };
     }
     if (!accept) {
       st.status = "declined";
+      release(db, from, `straight:${groupId}`, "직진이 이어지지 않아 증표를 돌려드렸어요");
       return {};
     }
     st.status = "accepted";
+    consume(db, from, `straight:${groupId}`, "직진이 수락돼 증표 사용");
     st.chatId = openChat(db, groupId, from, userId, "straight");
     return { chatId: st.chatId };
   });
@@ -226,12 +234,19 @@ export function processStraights(now = Date.now()) {
     for (const g of Object.values(db.groups)) {
       for (const [from, st] of Object.entries(g.straights ?? {})) {
         if (st.status !== "pending") continue;
-        if (now > st.expiresAt) st.status = "expired";
-        else if (st.demoReply && now >= st.demoReply.at) {
+        const ref = `straight:${g.id}`;
+        if (now > st.expiresAt) {
+          st.status = "expired";
+          release(db, from, ref, "직진이 이어지지 않아 증표를 돌려드렸어요");
+        } else if (st.demoReply && now >= st.demoReply.at) {
           if (st.demoReply.accept) {
             st.status = "accepted";
+            consume(db, from, ref, "직진이 수락돼 증표 사용");
             st.chatId = openChat(db, g.id, from, st.to, "straight");
-          } else st.status = "declined";
+          } else {
+            st.status = "declined";
+            release(db, from, ref, "직진이 이어지지 않아 증표를 돌려드렸어요");
+          }
         }
       }
     }
@@ -248,6 +263,39 @@ export function purgeExpired(now = Date.now()) {
   mutate((db) => {
     for (const c of expired) delete db.chats[c.id];
     for (const g of oldGroups) delete db.groups[g.id];
+  });
+}
+
+// ───────────── 입장권: 1:1 대화 성사 확인 ─────────────
+
+/**
+ * 대화방 화면이 보내는 '여기 있어요' 신호를 기록하고, 지금 라운드의 1:1 대화가
+ * 두 사람 모두 접속한 채로 일정 시간(기본 30초) 이어졌으면 두 사람의 입장권을 차감해요.
+ * (데모 참가자는 항상 접속 중으로 봐요. 실제 음성 연결 확인은 LiveKit 웹훅으로 더 정확하게 바꿀 수 있어요.)
+ */
+export function recordPresence(userId: string, now = Date.now()) {
+  const db = readDb();
+  const u = db.users[userId];
+  const g = u?.groupId ? db.groups[u.groupId] : undefined;
+  if (!g || g.status !== "live") return;
+  const phase = currentPhase(g, now);
+  if (phase.kind !== "talk") return;
+  const partner = partnerIn(g, phase.round, userId);
+  if (!partner) return;
+  const roundStart = phase.endsAt - g.roundSeconds * 1000;
+  mutate((db) => {
+    const grp = db.groups[g.id];
+    grp.presence ??= {};
+    const r = (grp.presence[phase.round] ??= {});
+    const me = (r[userId] ??= { first: now, last: now });
+    me.last = now;
+    const other = db.users[partner]?.isDemo ? { first: roundStart, last: now } : r[partner];
+    if (!other || now - other.last > 15_000) return;
+    const since = Math.max(me.first, other.first, roundStart);
+    if (now - since < TICKET_AFTER_MS()) return;
+    const ref = `group:${grp.id}`;
+    consume(db, userId, ref, `'${grp.theme.title}' 1:1 대화가 성사돼 입장권 사용`);
+    consume(db, partner, ref, `'${grp.theme.title}' 1:1 대화가 성사돼 입장권 사용`);
   });
 }
 
@@ -290,6 +338,7 @@ export function reportView(userId: string, groupId: string, publicMember: (id: s
         // 보낸 사람에게는 거절과 만료를 구분하지 않아요
         sent: mine ? { to: publicMember(mine.to), message: mine.message, status: sentStatus, chatId: mine.chatId ?? null } : null,
         stage: straightStage(db, g, userId),
+        badges: available(db, userId, "badge"),
         candidates: straightStage(db, g, userId) === "open" ? straightCandidates(db, g, userId).map((id) => publicMember(id)) : [],
         received: Object.entries(g.straights ?? {})
           .filter(([, st]) => st.to === userId)
