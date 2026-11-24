@@ -1,0 +1,7 @@
+# Supabase CLI 설정 (supabase link / db push / functions deploy 에서 씀)
+project_id = "hiro"
+
+[functions.api]
+# 로그인 확인은 함수 안에서 Supabase 공개키(JWKS)로 직접 해요 (_shared/server/auth.ts).
+verify_jwt = false
+import_map = "./functions/api/deno.json"

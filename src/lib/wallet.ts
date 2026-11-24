@@ -5,42 +5,9 @@
 import { mutate, newId, readDb } from "./store";
 import type { DB, User, Wallet, WalletItem } from "./types";
 
-export const PRICE = {
-  ticket: () => Number(process.env.HIRO_TICKET_DOKI ?? 10),
-  badge: () => Number(process.env.HIRO_BADGE_DOKI ?? 30),
-};
+import { DOKI_PACKS, PRICE, STARTER, TICKET_AFTER_MS, bundles, priceOf } from "./pricing";
 
-/**
- * 묶음 할인. 정해진 묶음으로만 바꿀 수 있어요 (가격 계산이 어긋나지 않도록).
- * 1개짜리는 항상 기본 가격이고, 자동 교환도 1개 가격으로 바꿔요.
- */
-export function bundles(item: "ticket" | "badge") {
-  const unit = item === "ticket" ? PRICE.ticket() : PRICE.badge();
-  const list = item === "ticket" ? [1, 5, 10] : [1, 3];
-  const discount: Record<number, number> = item === "ticket" ? { 1: 0, 5: 10, 10: 20 } : { 1: 0, 3: 11 };
-  return list.map((count) => {
-    const full = unit * count;
-    const price = Math.round((full * (100 - discount[count])) / 100);
-    return { count, price, full, discount: discount[count] };
-  });
-}
-
-function priceOf(item: "ticket" | "badge", count: number) {
-  return bundles(item).find((b) => b.count === count)?.price ?? null;
-}
-export const STARTER = {
-  tickets: () => Number(process.env.HIRO_STARTER_TICKETS ?? 5),
-  badges: () => Number(process.env.HIRO_STARTER_BADGES ?? 1),
-};
-/** 첫 1:1 대화가 이만큼 이어지면 입장권을 차감해요. */
-export const TICKET_AFTER_MS = () => Number(process.env.HIRO_TICKET_AFTER_SECONDS ?? 30) * 1000;
-
-/** 충전 상품 (결제 연결 전이라 화면에만 보여요) */
-export const DOKI_PACKS = [
-  { doki: 50, price: 4900, bonus: 0 },
-  { doki: 120, price: 9900, bonus: 20 },
-  { doki: 300, price: 22000, bonus: 35 },
-];
+export { DOKI_PACKS, PRICE, STARTER, TICKET_AFTER_MS, bundles };
 
 function log(db: DB, userId: string, kind: DB["ledger"][number]["kind"], item: WalletItem, amount: number, note: string, ref?: string) {
   db.ledger.push({ id: newId("tx"), userId, at: Date.now(), kind, item, amount, note, ref });

@@ -34,6 +34,22 @@ jobs:
           psql -v ON_ERROR_STOP=1 -qAt -d postgres -f supabase/tests/wallet.test.sql | tee result.txt
           grep -q " 0 failed" result.txt
 
+      # ── 서버 함수(Edge Functions): 타입 검사, 린트, API 통합 테스트 ──
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Edge Functions check + lint
+        working-directory: supabase/functions
+        run: |
+          deno check --config api/deno.json api/index.ts tests/api_test.ts
+          deno lint --config api/deno.json api _shared/server tests
+      - name: Edge Functions API tests
+        working-directory: supabase/functions
+        env:
+          HIRO_DB_URL: postgres://postgres:postgres@localhost:5432/postgres
+          HIRO_TEST_AUTH: "1"
+        run: deno test -A --config api/deno.json tests/
+
       # ── 앱: 타입 검사, 린트, 빌드 ──
       - uses: actions/setup-node@v4
         with:
