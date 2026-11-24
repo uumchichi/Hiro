@@ -49,16 +49,11 @@ jobs:
         # 연결한 프로젝트에 배포해요. 로그인 확인은 함수 안에서 직접 하므로 Supabase의 기본 JWT 검사는 꺼요.
         run: supabase functions deploy api --no-verify-jwt --yes
 
-  pages:
+  # 사이트 만들기와 올리기를 두 작업으로 나눠요 (GitHub 권장 방식).
+  # 파일을 올린 직후에는 GitHub 목록에 아직 안 보일 수 있어서, 올리는 쪽에서 보일 때까지 기다려요.
+  build-site:
     needs: supabase
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       - name: Check settings
@@ -84,5 +79,31 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: out
+
+  deploy-site:
+    needs: build-site
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read # 올린 사이트 파일이 목록에 보이는지 확인하려고
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Wait until the uploaded site is listed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for i in $(seq 1 18); do
+            n=$(gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts" --jq '[.artifacts[] | select(.name=="github-pages")] | length')
+            echo "시도 $i: github-pages 파일 ${n}개"
+            if [ "$n" = "1" ]; then exit 0; fi
+            if [ "$n" -gt 1 ] 2>/dev/null; then echo "::error::같은 실행에서 사이트 파일이 여러 개예요. 'Re-run' 대신 'Run workflow'로 새로 실행하세요."; exit 1; fi
+            sleep 5
+          done
+          echo "::error::90초 안에 사이트 파일이 목록에 나타나지 않았어요."
+          exit 1
       - id: deployment
         uses: actions/deploy-pages@v4
