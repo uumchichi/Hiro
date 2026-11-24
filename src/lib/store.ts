@@ -1,3 +1,4 @@
+import { setWorldProvider } from "../../supabase/functions/_shared/world.ts";
 import fs from "node:fs";
 import path from "node:path";
 import type { DB } from "./types";
@@ -212,6 +213,7 @@ export function resetDb() {
   persist(g.__hiroDb);
 }
 
-export function newId(prefix: string) {
-  return `${prefix}_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
-}
+export { newId } from "../../supabase/functions/_shared/world.ts";
+
+// 공용 도메인 로직(대기실·초대장·그룹·쪽지·지갑)이 이 저장소를 쓰도록 연결해요.
+setWorldProvider({ readDb, mutate });

@@ -60,24 +60,6 @@ export async function grant(q: Q, userId: string, item: "doki" | ShopItem, amoun
   await q`select wallet_grant(${userId}, ${item}, ${amount}, ${note})`;
 }
 
-/** 대기실·상태 화면용 요약 */
-export async function walletSummary(q: Q, userId: string, groupId: string | null) {
-  const [w] = await q<{ tickets: number; badges: number }[]>`
-    select wallet_available(${userId}, 'ticket') as tickets, wallet_available(${userId}, 'badge') as badges
-    from wallets where user_id = ${userId}`;
-  if (!w) return null;
-  let groupTicket = null;
-  if (groupId) {
-    const prefix = `group:${groupId}`;
-    const [g] = await q<{ held: number; used: number }[]>`
-      select
-        (select count(*) from wallet_holds where user_id = ${userId} and (ref = ${prefix} or ref like ${prefix + ":%"}))::int as held,
-        (select count(*) from ledger where user_id = ${userId} and kind = 'use' and (ref = ${prefix} or ref like ${prefix + ":%"}))::int as used`;
-    groupTicket = g;
-  }
-  return { tickets: w.tickets, badges: w.badges, groupTicket };
-}
-
 /** 지갑 화면 */
 export async function walletView(q: Q, userId: string) {
   await ensureWallet(q, userId); // 예전 사용자도 처음 열 때 가입 선물을 받아요

@@ -18,9 +18,25 @@ export function db(): Sql {
   return sql;
 }
 
-/** 트랜잭션 안에서 실행해요. 동시에 같은 행을 바꾸는 요청은 행 잠금으로 차례를 기다려요. */
+// 데이터를 바꾸는 요청은 모두 이 잠금을 잡고 하나씩 처리해요.
+// (도메인 로직이 여러 테이블을 한꺼번에 읽고 쓰기 때문에, 중간에 다른 요청이 끼어들면 어긋날 수 있어요.)
+const WORLD_LOCK = 4_747_001;
+
+/** 트랜잭션 안에서 실행해요. 전역 잠금을 잡아서 데이터를 바꾸는 다른 요청과 겹치지 않아요. */
 export function tx<T>(fn: (t: Tx) => Promise<T>): Promise<T> {
-  return db().begin((t) => fn(t)) as Promise<T>;
+  return db().begin(async (t) => {
+    await t`select pg_advisory_xact_lock(${WORLD_LOCK})`;
+    return fn(t);
+  }) as Promise<T>;
+}
+
+/** 잠금을 기다리지 않고, 다른 요청이 잡고 있으면 null (주기 처리를 여러 요청이 동시에 하지 않도록) */
+export function tryTx<T>(fn: (t: Tx) => Promise<T>): Promise<T | null> {
+  return db().begin(async (t) => {
+    const [r] = await t<{ ok: boolean }[]>`select pg_try_advisory_xact_lock(${WORLD_LOCK}) as ok`;
+    if (!r.ok) return null;
+    return fn(t);
+  }) as Promise<T | null>;
 }
 
 export async function closeDb() {

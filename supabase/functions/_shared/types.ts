@@ -110,6 +110,7 @@ export interface Slot {
   inviteOnly?: boolean; // AI 예약 초대로 확정된 비공개 세션
   curated?: boolean; // 운영진이 기획한 이벤트
   capacity?: number; // 운영진 이벤트 정원 (신청 인원 상한)
+  formingIds?: string[]; // 그룹을 나누는 중: 시작 시간에 대기실에 있던 사람
   note?: string;
 }
 
@@ -227,4 +228,5 @@ export interface DB {
   chats: Record<string, Chat>;
   reports: UserReport[];
   ledger: WalletTxn[];
+  ticks?: Record<string, number>; // 주기 처리의 마지막 실행 시각 (예: "invite:now")
 }

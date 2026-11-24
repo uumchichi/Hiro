@@ -8,16 +8,22 @@ import { ALL_CELLS } from "../../_shared/schedule.ts";
 import { tx } from "../../_shared/server/db.ts";
 import { fail } from "../../_shared/server/http.ts";
 import { lockUser } from "../../_shared/server/users.ts";
-import { viewState } from "../../_shared/server/view.ts";
+import { recordPresence } from "../../_shared/notes.ts";
+import { viewState } from "../../_shared/state.ts";
+import { background, runTick } from "../../_shared/server/tick.ts";
+import { inWorld, inWorldTx } from "../../_shared/server/world-tx.ts";
 import { ensureWallet } from "../../_shared/server/wallet.ts";
 import type { Ctx } from "../router.ts";
 
-export function getState(ctx: Ctx): Promise<unknown> {
-  return tx(async (t) => {
-    // 대화방의 presence=1, 대기실·이벤트 처리는 그룹 기능을 옮길 때 이어 붙여요.
-    const user = await lockUser(t, ctx.user.id);
-    return viewState(t, user);
+/** 내 상태. 대화방 화면은 presence=1로 불러서 1:1 대화가 이어지는지 알려요 (입장권 차감 기준). */
+export async function getState(ctx: Ctx) {
+  const presence = ctx.url.searchParams.get("presence") === "1";
+  const view = await inWorld(() => {
+    if (presence) recordPresence(ctx.user.id);
+    return viewState(ctx.user.id);
   });
+  await background(runTick());
+  return view;
 }
 
 const ProfileBody = z.object({
@@ -62,7 +68,7 @@ export function postProfile(ctx: Ctx): Promise<unknown> {
         status = case when status = 'new' then 'profiled' else status end
       where id = ${u.id}`;
     await ensureWallet(t, u.id); // 신규 가입 선물: 입장권 + 직진러의 증표
-    return viewState(t, await lockUser(t, u.id));
+    return inWorldTx(t, () => viewState(u.id));
   });
 }
 
@@ -101,6 +107,6 @@ export async function postQuiz(ctx: Ctx) {
         analysis = ${t.json(analysis as unknown as Record<string, unknown>)},
         status = case when status in ('new', 'profiled') then 'analyzed' else status end
       where id = ${u.id}`;
-    return viewState(t, await lockUser(t, u.id));
+    return inWorldTx(t, () => viewState(u.id));
   });
 }

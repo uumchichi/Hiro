@@ -5,6 +5,7 @@ import { CORS_HEADERS, HttpError, json, readJson } from "../_shared/server/http.
 import { ensureUser } from "../_shared/server/users.ts";
 import type { User } from "../_shared/types.ts";
 import { getState, postProfile, postQuiz } from "./routes/me.ts";
+import { getLobby, postInviteRespond, postLobby } from "./routes/lobby.ts";
 import { getWallet, postWallet } from "./routes/wallet.ts";
 
 export interface Ctx {
@@ -24,6 +25,9 @@ const ROUTES: [string, Handler][] = [
   ["POST /quiz", postQuiz],
   ["GET /wallet", getWallet],
   ["POST /wallet", postWallet],
+  ["GET /lobby", getLobby],
+  ["POST /lobby", postLobby],
+  ["POST /invites/respond", postInviteRespond],
 ];
 
 const compiled = ROUTES.map(([spec, handler]) => {
