@@ -40,7 +40,6 @@ export default function Home() {
             <Link href={href} className="btn bg-white text-[#6b2fd6] shadow-lg hover:brightness-95">
               {started ? "이어서 하기" : "무료로 시작하기"}
             </Link>
-            <Link href="/admin" className="btn border border-white/50 text-white hover:bg-white/10">운영자 화면</Link>
           </div>
         </div>
       </section>

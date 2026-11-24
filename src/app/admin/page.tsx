@@ -71,12 +71,23 @@ export default function AdminPage() {
   }, []);
 
   const load = useCallback(async () => {
-    const res = await apiFetch("/api/admin/overview", { headers: { "x-admin-key": key }, cache: "no-store" });
-    const d = await res.json();
-    if (!res.ok) {
-      setMsg(d.error);
+    if (!key) {
+      // 키가 없으면 서버에 묻지 않아요.
       setData(null);
-    } else setData(d);
+      setMsg(null);
+      return;
+    }
+    try {
+      const res = await apiFetch("/api/admin/overview", { headers: { "x-admin-key": key }, cache: "no-store" });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMsg(d.error ?? "운영자 정보를 불러오지 못했어요.");
+        setData(null);
+      } else setData(d);
+    } catch {
+      setMsg("서버에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.");
+      setData(null);
+    }
   }, [key]);
 
   useEffect(() => {
@@ -105,6 +116,31 @@ export default function AdminPage() {
   const upcoming = data?.slots.filter((s) => s.status === "open" || s.status === "forming") ?? [];
   const finished = data?.slots.filter((s) => s.status === "started" || s.status === "cancelled") ?? [];
 
+  // 서버가 키를 받아 주기 전에는 운영 메뉴를 전혀 보여주지 않아요. (실제 보안은 서버가 키를 확인해서 지켜요.)
+  if (!data) {
+    return (
+      <div className="mx-auto max-w-sm space-y-4 pt-10">
+        <h1 className="text-2xl font-extrabold">운영자 화면</h1>
+        <p className="text-sm text-muted">운영자만 사용할 수 있어요. 운영자 키를 입력하면 열려요.</p>
+        <input
+          type="password"
+          autoComplete="off"
+          className="input"
+          placeholder="운영자 키"
+          value={key}
+          onChange={(e) => {
+            setKey(e.target.value);
+            setMsg(null);
+            try {
+              localStorage.setItem("hiro_admin_key", e.target.value);
+            } catch {}
+          }}
+        />
+        {key && msg && <p className="text-sm text-red-700">{msg}</p>}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 pt-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -113,8 +149,10 @@ export default function AdminPage() {
           <p className="text-sm text-muted">테마 게시판은 늘 열려 있고, 세션은 시작 시간에 자동으로 그룹이 돼요.</p>
         </div>
         <input
+          type="password"
+          autoComplete="off"
           className="input max-w-56"
-          placeholder="운영자 키 (설정한 경우)"
+          placeholder="운영자 키"
           value={key}
           onChange={(e) => {
             setKey(e.target.value);
