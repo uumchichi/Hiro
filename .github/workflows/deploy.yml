@@ -37,15 +37,17 @@ jobs:
           done
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 3.3.0 # 옵션 이름이 버전마다 달라서 고정해요. 올릴 때는 명령 옵션도 함께 확인하세요.
       - name: Link project
         run: supabase link --project-ref "$PROJECT_REF"
       # 이미 SQL Editor로 적용한 마이그레이션도 안전해요 (여러 번 적용해도 같은 결과가 되게 만들었어요)
       - name: Apply database migrations
-        # DB 비밀번호는 환경변수 SUPABASE_DB_PASSWORD로 전달돼요. --linked: 위에서 연결한 Supabase 프로젝트에 적용
-        run: supabase db push --linked --include-all
+        # DB 비밀번호는 환경변수 SUPABASE_DB_PASSWORD로 전달돼요. --remote: 위에서 연결한 Supabase 프로젝트에 적용,
+        # --yes: 자동 실행이라 "적용할까요?" 질문에 답할 수 없어서 미리 승인
+        run: supabase db push --remote --include-all --yes
       - name: Deploy Edge Function (api)
-        run: supabase functions deploy api --project-ref "$PROJECT_REF" --no-verify-jwt
+        # 연결한 프로젝트에 배포해요. 로그인 확인은 함수 안에서 직접 하므로 Supabase의 기본 JWT 검사는 꺼요.
+        run: supabase functions deploy api --no-verify-jwt --yes
 
   pages:
     needs: supabase
