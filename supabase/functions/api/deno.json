@@ -1,0 +1,13 @@
+{
+  "imports": {
+    "@anthropic-ai/sdk": "npm:@anthropic-ai/sdk@^1.12.0",
+    "@anthropic-ai/sdk/": "npm:/@anthropic-ai/sdk@^1.12.0/",
+    "zod": "npm:zod@^4.6.7",
+    "postgres": "npm:postgres@^4.1.1",
+    "jose": "npm:jose@^6.1.0",
+    "livekit-server-sdk": "npm:livekit-server-sdk@^2.20.1"
+  },
+  "compilerOptions": {
+    "strict": true
+  }
+}

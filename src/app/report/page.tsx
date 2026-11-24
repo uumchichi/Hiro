@@ -1,0 +1,321 @@
+"use client";
+
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import { MemberCard } from "@/components/MemberCard";
+import { fmtRemain } from "@/components/time";
+import type { PublicMember } from "@/lib/server";
+import { apiFetch } from "@/lib/api";
+
+interface Report {
+  id: string;
+  theme: { title: string; emoji: string };
+  done: boolean;
+  received: { index: number; text: string; owner: PublicMember | null }[];
+  receivedCount: number | null;
+  revealedIndex: number | null;
+  mutual: boolean;
+  chat: { id: string; expiresAt: number } | null;
+  people: { member: PublicMember; letter: string; memo: string }[];
+  straight: {
+    sent: { to: PublicMember; message: string; status: "pending" | "accepted" | "missed"; chatId: string | null } | null;
+    stage: "rotation" | "need_reveal" | "matched" | "open" | "used";
+    badges: number;
+    canStraight: boolean;
+    candidates: PublicMember[];
+    received: {
+      from: PublicMember;
+      fromId: string;
+      letter: string;
+      message: string;
+      status: "pending" | "accepted" | "declined" | "expired";
+      expiresAt: number;
+      chatId: string | null;
+    }[];
+  };
+}
+
+// 주소: /report?id=… (정적 사이트에서도 열리도록 id를 주소 뒤에 붙여요)
+export default function ReportPageWrapper() {
+  return (
+    <Suspense>
+      <ReportPage />
+    </Suspense>
+  );
+}
+
+function ReportPage() {
+  const id = useSearchParams().get("id") ?? "";
+  const [r, setR] = useState<Report | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [confirmIdx, setConfirmIdx] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [straightTo, setStraightTo] = useState<string | null>(null);
+  const [straightMsg, setStraightMsg] = useState("");
+  const [straightConfirm, setStraightConfirm] = useState(false);
+
+  const load = useCallback(async () => {
+    const res = await apiFetch(`/api/report/${id}`, { cache: "no-store" });
+    const d = await res.json().catch(() => ({}));
+    if (res.ok) setR(d);
+    else setErr(d.error ?? "리포트를 불러오지 못했어요.");
+  }, [id]);
+
+  useEffect(() => {
+    load();
+    const t = setInterval(load, 5000); // 상대가 나중에 주인 찾기를 하면 매칭이 생길 수 있어요
+    return () => clearInterval(t);
+  }, [load]);
+
+  async function reveal(index: number) {
+    setBusy(true);
+    const res = await apiFetch(`/api/report/${id}/reveal`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ index }) });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) setErr(d.error ?? "실패했어요.");
+    setConfirmIdx(null);
+    setBusy(false);
+    load();
+  }
+
+  async function straight(body: unknown) {
+    setBusy(true);
+    setErr(null);
+    const res = await apiFetch(`/api/report/${id}/straight`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) setErr(d.error ?? "실패했어요.");
+    setStraightConfirm(false);
+    setBusy(false);
+    load();
+  }
+
+  if (err && !r) return <p className="pt-10 text-center text-muted">{err}</p>;
+  if (!r) return <p className="pt-10 text-center text-muted">불러오는 중…</p>;
+
+  const owner = r.revealedIndex !== null ? r.received[r.revealedIndex]?.owner : null;
+  const sentToOwner = owner ? Boolean(r.people.find((p) => p.member.id === owner.id)?.letter) : false;
+  const sent = r.people.filter((p) => p.letter).length;
+  const memos = r.people.filter((p) => p.memo).length;
+
+  return (
+    <div className="space-y-6 pt-4">
+      <section className="relative overflow-hidden rounded-[2rem] bg-hiro px-6 py-8 text-white">
+        <span className="orb -right-8 -top-8 h-32 w-32" aria-hidden />
+        <p className="relative text-sm font-semibold text-white/85">로테이션 리포트</p>
+        <h1 className="relative mt-1 text-2xl font-extrabold">
+          {r.theme.emoji} {r.theme.title}
+        </h1>
+        <div className="relative mt-4 grid grid-cols-3 gap-2 text-center">
+          {[
+            ["받은 쪽지", r.receivedCount ?? 0],
+            ["보낸 쪽지", sent],
+            ["만난 사람", r.people.length],
+          ].map(([label, n]) => (
+            <div key={label} className="rounded-2xl bg-white/15 px-2 py-3 backdrop-blur">
+              <p className="text-2xl font-extrabold tabular-nums">{n}</p>
+              <p className="text-xs text-white/85">{label}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {err && <p className="rounded-2xl bg-brand-soft px-4 py-3 text-sm font-semibold">{err}</p>}
+
+      {/* 받은 직진 */}
+      {r.straight.received.map((st) => (
+        <section key={st.fromId} className="card space-y-3 border-[var(--tek)]">
+          <p className="text-lg font-extrabold">💘 {st.from.nickname}님이 직진했어요</p>
+          <MemberCard m={st.from} report={`straight:${r.id}`} />
+          {st.letter && <p className="whitespace-pre-wrap text-[15px]">💌 “{st.letter}”</p>}
+          {st.message && <p className="whitespace-pre-wrap rounded-2xl bg-brand-soft px-4 py-3 text-sm">💬 {st.message}</p>}
+          {st.status === "pending" && (
+            <>
+              <p className="text-xs text-muted">수락하면 24시간 동안 둘만의 채팅방이 열려요. {fmtRemain(st.expiresAt - Date.now())} 안에 답해 주세요. 거절해도 상대에게는 거절했다고 알려지지 않아요.</p>
+              <div className="grid grid-cols-2 gap-3">
+                <button className="btn-ghost" disabled={busy} onClick={() => straight({ action: "respond", from: st.fromId, accept: false })}>
+                  다음에요
+                </button>
+                <button className="btn-primary" disabled={busy} onClick={() => straight({ action: "respond", from: st.fromId, accept: true })}>
+                  수락하기
+                </button>
+              </div>
+            </>
+          )}
+          {st.status === "accepted" && st.chatId && (
+            <Link href={`/chat?id=${st.chatId}`} className="btn-primary w-full">
+              채팅방 열기
+            </Link>
+          )}
+          {st.status === "declined" && <p className="text-sm text-muted">이번엔 정중히 넘겼어요.</p>}
+          {st.status === "expired" && <p className="text-sm text-muted">응답 시간이 지났어요.</p>}
+        </section>
+      ))}
+
+      {/* 매칭 */}
+      {r.mutual && r.chat && (
+        <section className="card space-y-3 border-brand text-center">
+          <p className="text-4xl">💞</p>
+          <h2 className="text-xl font-extrabold">서로의 쪽지 주인을 찾았어요!</h2>
+          <p className="text-sm text-muted">둘만의 채팅방이 열렸어요. 채팅방은 {fmtRemain(r.chat.expiresAt - Date.now())} 뒤 자동으로 사라져요.</p>
+          <Link href={`/chat?id=${r.chat.id}`} className="btn-primary">
+            채팅방 열기
+          </Link>
+        </section>
+      )}
+
+      {/* 받은 쪽지 */}
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-lg font-bold">💌 받은 쪽지 {r.receivedCount ?? 0}개</h2>
+          <p className="text-sm text-muted">
+            쪽지는 익명이에요. 단 <b>한 개</b>만 골라 주인을 확인할 수 있어요. 서로가 서로의 쪽지 주인을 찾으면 24시간 동안 둘만의 채팅방이 열려요.
+          </p>
+        </div>
+        {r.received.length === 0 && <p className="card text-center text-muted">이번엔 받은 쪽지가 없어요. 다음 만남을 기대해요!</p>}
+        {r.received.map((l) => (
+          <div key={l.index} className={`card space-y-3 ${l.owner ? "border-brand" : ""}`}>
+            <p className="text-xs font-semibold text-muted">{l.owner ? "주인을 찾은 쪽지" : `익명의 쪽지 #${l.index + 1}`}</p>
+            <p className="whitespace-pre-wrap text-[15px] leading-relaxed">“{l.text}”</p>
+            {l.owner && <MemberCard m={l.owner} highlight report={`report:${r.id}`} />}
+            {r.revealedIndex === null && (
+              <button className="btn-ghost w-full text-sm" onClick={() => setConfirmIdx(l.index)}>
+                🔎 이 쪽지의 주인 찾기
+              </button>
+            )}
+          </div>
+        ))}
+        {owner && !r.mutual && (
+          <p className="rounded-2xl bg-brand-soft px-4 py-3 text-sm">
+            {sentToOwner
+              ? `${owner.nickname}님도 내 쪽지의 주인을 찾으면 둘만의 채팅방이 열려요.`
+              : `${owner.nickname}님에게는 쪽지를 보내지 않아서, 이번에는 매칭으로 이어지지 않아요.`}
+          </p>
+        )}
+      </section>
+
+      {/* 직진하기 */}
+      {r.done && r.straight.stage !== "matched" && (
+        <section className="card space-y-3">
+          <div>
+            <h2 className="text-lg font-bold">💘 직진하기</h2>
+            <p className="text-sm text-muted">
+              쪽지 주인 찾기로 매칭되지 않았을 때의 마지막 기회예요. 쪽지를 보낸 분 중 <b>한 명</b>에게 채팅을 신청할 수 있고, 상대가 수락하면 24시간 채팅방이 열려요. 직진은 <b>내가 누구인지 상대에게 보여요</b>.
+            </p>
+          </div>
+          {r.straight.stage === "need_reveal" ? (
+            <p className="rounded-2xl bg-bg px-4 py-3 text-sm text-muted">🔒 먼저 위에서 쪽지의 주인을 찾아 보세요. 서로 지목하지 못했을 때 직진할 수 있어요.</p>
+          ) : r.straight.sent ? (
+            <div className="rounded-2xl bg-brand-soft px-4 py-3 text-sm">
+              <p>
+                <b>{r.straight.sent.to.nickname}</b>님에게 직진했어요.
+              </p>
+              {r.straight.sent.status === "pending" && <p className="mt-1 text-muted">답을 기다리고 있어요. 최대 24시간이 걸릴 수 있어요.</p>}
+              {r.straight.sent.status === "accepted" && r.straight.sent.chatId && (
+                <Link href={`/chat?id=${r.straight.sent.chatId}`} className="btn-primary mt-3 w-full">
+                  수락했어요! 채팅방 열기
+                </Link>
+              )}
+              {r.straight.sent.status === "missed" && <p className="mt-1 text-muted">이번엔 이어지지 않았어요. 다음 만남을 응원해요.</p>}
+            </div>
+          ) : r.straight.candidates.length === 0 ? (
+            <p className="text-sm text-muted">
+              {r.people.some((p) => p.letter) ? "쪽지를 보낸 분들과는 이미 채팅방이 열려 있어요." : "쪽지를 보낸 분에게만 직진할 수 있어요. 다음 로테이션에서 마음에 드는 분께 쪽지를 남겨 보세요."}
+            </p>
+          ) : (
+            <>
+              <div className="flex flex-wrap gap-2">
+                {r.straight.candidates.map((c) => (
+                  <button key={c.id} type="button" aria-pressed={straightTo === c.id} className={`chip ${straightTo === c.id ? "chip-on" : ""}`} onClick={() => setStraightTo(c.id)}>
+                    {c.emoji} {c.nickname}
+                  </button>
+                ))}
+              </div>
+              {straightTo && (
+                <>
+                  <input className="input text-sm" maxLength={100} placeholder="한마디 남기기 (선택)" value={straightMsg} onChange={(e) => setStraightMsg(e.target.value)} />
+                  <p className="text-xs text-muted">
+                    💘 직진러의 증표 {r.straight.badges}개
+                    {r.straight.badges < 1 && r.straight.canStraight ? " (보낼 때 도키로 자동 교환돼요)" : ""} · 상대가 수락하면 1개가 사용되고, 이어지지 않으면 돌려드려요.{" "}
+                    {!r.straight.canStraight && (
+                      <Link href="/wallet" className="font-semibold text-brand underline">
+                        내 지갑 열기
+                      </Link>
+                    )}
+                  </p>
+                  <button className="btn-primary w-full" disabled={!r.straight.canStraight} onClick={() => setStraightConfirm(true)}>
+                    💘 직진하기
+                  </button>
+                </>
+              )}
+            </>
+          )}
+        </section>
+      )}
+
+      {/* 메모 리포트 */}
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-lg font-bold">📝 내 메모 리포트</h2>
+          <p className="text-sm text-muted">
+            만난 사람 {r.people.length}명 · 메모 {memos}개 · 보낸 쪽지 {sent}개. 메모와 보낸 쪽지는 나만 볼 수 있어요.
+          </p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {r.people.map((p) => (
+            <MemberCard key={p.member.id} m={p.member} report={`report:${r.id}`}>
+              <div className="mt-3 space-y-2 text-sm">
+                <p className={p.memo ? "whitespace-pre-wrap" : "text-muted"}>📝 {p.memo || "메모 없음"}</p>
+                {p.letter && <p className="whitespace-pre-wrap text-muted">💌 보낸 쪽지: {p.letter}</p>}
+              </div>
+            </MemberCard>
+          ))}
+        </div>
+      </section>
+
+      <div className="flex flex-wrap gap-3">
+        <Link href="/lobby" className="btn-primary">
+          대기실로
+        </Link>
+        <Link href="/records" className="btn-ghost">
+          내 기록
+        </Link>
+      </div>
+
+      {straightConfirm && straightTo && (
+        <div className="fixed inset-0 z-50 grid place-items-end bg-black/40 p-4 sm:place-items-center" role="dialog" aria-modal="true">
+          <div className="w-full max-w-sm space-y-4 rounded-[2rem] bg-surface p-6 text-center shadow-2xl">
+            <p className="text-3xl">💘</p>
+            <p className="text-lg font-bold">{r.straight.candidates.find((c) => c.id === straightTo)?.nickname}님에게 직진할까요?</p>
+            <p className="text-sm text-muted">직진은 이번 로테이션에서 <b>한 번만</b> 할 수 있고, 상대에게 내가 누구인지 보여요.</p>
+            <div className="grid grid-cols-2 gap-3">
+              <button className="btn-ghost" onClick={() => setStraightConfirm(false)}>
+                취소
+              </button>
+              <button className="btn-primary" disabled={busy} onClick={() => straight({ action: "send", to: straightTo, message: straightMsg })}>
+                직진하기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmIdx !== null && (
+        <div className="fixed inset-0 z-50 grid place-items-end bg-black/40 p-4 sm:place-items-center" role="dialog" aria-modal="true">
+          <div className="w-full max-w-sm space-y-4 rounded-[2rem] bg-surface p-6 text-center shadow-2xl">
+            <p className="text-3xl">🔎</p>
+            <p className="text-lg font-bold">이 쪽지의 주인을 확인할까요?</p>
+            <p className="text-sm text-muted">주인 찾기는 이번 로테이션에서 <b>단 한 번</b>만 할 수 있어요.</p>
+            <div className="grid grid-cols-2 gap-3">
+              <button className="btn-ghost" onClick={() => setConfirmIdx(null)}>
+                취소
+              </button>
+              <button className="btn-primary" disabled={busy} onClick={() => reveal(confirmIdx)}>
+                확인하기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

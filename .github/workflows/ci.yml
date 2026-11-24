@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_call: # 배포(deploy.yml)가 먼저 이 검사를 통과시켜요
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── DB: 마이그레이션을 두 번 적용해도 안전한지 + 지갑 함수 테스트 ──
+      - name: Apply migrations (twice)
+        run: |
+          psql -v ON_ERROR_STOP=1 -q -d postgres -f supabase/tests/setup-roles.sql
+          for f in supabase/migrations/*.sql; do psql -v ON_ERROR_STOP=1 -q -d postgres -f "$f"; done
+          for f in supabase/migrations/*.sql; do psql -v ON_ERROR_STOP=1 -q -d postgres -f "$f"; done
+      - name: Wallet tests
+        run: |
+          psql -v ON_ERROR_STOP=1 -qAt -d postgres -f supabase/tests/wallet.test.sql | tee result.txt
+          grep -q " 0 failed" result.txt
+
+      # ── 서버 함수(Edge Functions): 타입 검사, 린트, API 통합 테스트 ──
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Edge Functions check + lint
+        working-directory: supabase/functions
+        run: |
+          deno check --config api/deno.json api/index.ts tests/api_test.ts
+          deno lint --config api/deno.json api _shared/server tests
+      - name: Edge Functions API tests
+        working-directory: supabase/functions
+        env:
+          HIRO_DB_URL: postgres://postgres:postgres@localhost:5432/postgres
+          HIRO_TEST_AUTH: "1"
+        run: deno test -A --config api/deno.json tests/
+
+      # ── 앱: 타입 검사, 린트, 빌드 ──
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run lint
+      - run: npm run build
+      # GitHub Pages용 정적 사이트가 만들어지는지 (주소 값은 확인용 가짜 값이에요)
+      - name: Static site build
+        run: npm run build:static
+        env:
+          NEXT_PUBLIC_API_BASE: https://example.supabase.co/functions/v1/api
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder
+          NEXT_PUBLIC_BASE_PATH: /Hiro

@@ -1,0 +1,53 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { DEFAULT_HABITS, DEFAULT_PREFS, HAIR, normalizePrefs, normalizeTraits } from "@/lib/compat";
+import { ALL_TAGS, REGIONS } from "@/lib/questions";
+import { ALL_CELLS } from "@/lib/schedule";
+import { ensureUser, viewState } from "@/lib/server";
+import { mutate } from "@/lib/store";
+import { ensureWallet } from "@/lib/wallet";
+
+const Body = z.object({
+  nickname: z.string().trim().min(1).max(12),
+  birthYear: z.number().int().min(1950).max(new Date().getFullYear() - 19),
+  region: z.enum(REGIONS as [string, ...string[]]),
+  bio: z.string().trim().max(300),
+  tags: z.array(z.string()).max(12),
+  confirmWoman: z.literal(true),
+  availability: z.array(z.string()).max(28),
+  matchTraits: z.object({
+    hair: z.enum(HAIR),
+    tg: z.number().int().min(0).max(10).nullable(),
+    showTg: z.boolean(),
+  }),
+  prefs: z
+    .object({
+      hair: z.array(z.enum(HAIR)),
+      tgMin: z.number().int().min(0).max(10),
+      tgMax: z.number().int().min(0).max(10),
+      platonic: z.enum(["no", "ok", "only"]),
+    })
+    .refine((p) => p.tgMin <= p.tgMax),
+});
+
+export async function POST(req: Request) {
+  const parsed = Body.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) {
+    return NextResponse.json({ error: "입력값을 확인해 주세요. (만 19세 이상, 여성 확인 필수)" }, { status: 400 });
+  }
+  const user = await ensureUser();
+  const { nickname, birthYear, region, bio } = parsed.data;
+  const profile = { nickname, birthYear, region, bio, tags: parsed.data.tags.filter((t) => ALL_TAGS.includes(t)) };
+  mutate((db) => {
+    const u = db.users[user.id];
+    u.profile = profile;
+    u.availability = parsed.data.availability.filter((c) => ALL_CELLS.includes(c));
+    // 문담피는 성향 검사에서 받으므로 그대로 둡니다.
+    const habits = u.matchTraits ? normalizeTraits(u.matchTraits) : DEFAULT_HABITS;
+    u.matchTraits = { ...parsed.data.matchTraits, smoke: habits.smoke, tattoo: habits.tattoo, piercing: habits.piercing };
+    u.prefs = { ...(u.prefs ? normalizePrefs(u.prefs) : DEFAULT_PREFS), ...parsed.data.prefs };
+    if (u.status === "new") u.status = "profiled";
+    ensureWallet(db, u.id); // 신규 가입 선물: 입장권 + 직진러의 증표
+  });
+  return NextResponse.json(viewState(user.id));
+}

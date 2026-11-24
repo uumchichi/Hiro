@@ -1,0 +1,7 @@
+# Supabase CLI 설정 (supabase link / db push / functions deploy 에서 씀)
+project_id = "hiro"
+
+[functions.api]
+# 로그인 확인은 함수 안에서 Supabase 공개키(JWKS)로 직접 해요 (_shared/server/auth.ts).
+# 그래서 Supabase의 기본 JWT 검사는 꺼요. (/tick은 HIRO_CRON_KEY, /admin은 HIRO_ADMIN_KEY로 따로 막아요)
+verify_jwt = false
