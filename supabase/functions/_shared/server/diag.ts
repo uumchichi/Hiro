@@ -49,16 +49,37 @@ export async function runDiag(publicView = false) {
       LIVEKIT: Boolean(env("LIVEKIT_API_KEY")),
     },
   };
-  // 단계마다 시간·메모리를 재고, 실패해도 다음 단계로 넘어가요.
+  // 단계마다 시간·메모리를 재고, 실패해도 다음 단계로 넘어가요. 한 단계가 막혀도 점검 전체가 죽지 않게 단계마다 5초까지만 기다려요.
   async function stage(name: string, fn: () => Promise<Record<string, unknown> | void>) {
     const t0 = performance.now();
     try {
-      const extra = (await fn()) ?? {};
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const limit = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error("5초 안에 끝나지 않았어요 (다른 요청이 DB 잠금을 쥐고 있을 수 있어요)")), 5000);
+      });
+      const extra = (await Promise.race([fn(), limit]).finally(() => clearTimeout(timer))) ?? {};
       out[name] = { ok: true, ms: Math.round(performance.now() - t0), rssMB: mb(Deno.memoryUsage().rss), ...extra };
     } catch (err) {
       out[name] = { ok: false, ms: Math.round(performance.now() - t0), error: describeError(err) };
     }
   }
+  // 지금 DB에서 일하는 연결과 열려 있는 트랜잭션 (막힌 게 있으면 여기에 보여요)
+  await stage("0_db_activity", async () => {
+    const rows = await db()<{ pid: number; state: string; tx_age_s: number | null; in_state_s: number | null; wait: string | null; q: string }[]>`
+      select pid, state, extract(epoch from now() - xact_start)::int as tx_age_s,
+        extract(epoch from now() - state_change)::int as in_state_s, wait_event as wait, left(query, 60) as q
+      from pg_stat_activity
+      where datname = current_database() and pid <> pg_backend_pid() and state is distinct from 'idle' and usename = current_user
+      order by xact_start nulls last limit 15`;
+    const [lock] = await db()<{ holders: number }[]>`
+      select count(*)::int as holders from pg_locks where locktype = 'advisory' and granted`;
+    return {
+      activeConnections: rows.length,
+      idleInTransaction: rows.filter((r) => r.state === "idle in transaction").length,
+      advisoryLocksHeld: lock.holders,
+      sessions: rows.map((r) => ({ pid: r.pid, state: r.state, txAgeSec: r.tx_age_s, inStateSec: r.in_state_s, wait: r.wait, ...(publicView ? {} : { query: r.q }) })),
+    };
+  });
   await stage("1_ping", async () => {
     await db()`select 1`;
   });

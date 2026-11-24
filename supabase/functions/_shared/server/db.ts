@@ -18,6 +18,19 @@ export function db(): Sql {
   return sql;
 }
 
+// 시간 제한 (밀리초). 서버 함수가 중간에 꺼져서 DB 작업이 닫히지 않은 채 남아도, DB가 스스로 정리하게 해요.
+const ms = (key: string, fallback: number) => Number(env(key) ?? fallback);
+const LOCK_MS = () => ms("HIRO_LOCK_TIMEOUT_MS", 8000); // 다른 요청이 잠금을 쥐고 있을 때 기다리는 최대 시간
+const STATEMENT_MS = () => ms("HIRO_STATEMENT_TIMEOUT_MS", 20000); // 쿼리 하나의 최대 시간
+const IDLE_TX_MS = () => ms("HIRO_IDLE_TX_MS", 15000); // 트랜잭션이 아무 일 없이 열려 있을 수 있는 최대 시간 (클라이언트가 사라졌을 때 DB가 정리해요)
+
+/** 이 트랜잭션에만 적용되는 시간 제한 */
+async function applyLimits(t: Tx) {
+  await t`select set_config('lock_timeout', ${LOCK_MS() + "ms"}, true),
+    set_config('statement_timeout', ${STATEMENT_MS() + "ms"}, true),
+    set_config('idle_in_transaction_session_timeout', ${IDLE_TX_MS() + "ms"}, true)`;
+}
+
 // 데이터를 바꾸는 요청은 모두 이 잠금을 잡고 하나씩 처리해요.
 // (도메인 로직이 여러 테이블을 한꺼번에 읽고 쓰기 때문에, 중간에 다른 요청이 끼어들면 어긋날 수 있어요.)
 const WORLD_LOCK = 4_747_001;
@@ -26,7 +39,7 @@ const WORLD_LOCK = 4_747_001;
 export function tx<T>(fn: (t: Tx) => Promise<T>): Promise<T> {
   return db().begin(async (t) => {
     // 잠금을 오래 기다리거나 쿼리가 오래 걸리면 포기해서, 요청이 쌓여 서버 함수가 자원 한도에 걸리지 않게 해요.
-    await t`select set_config('lock_timeout', '20s', true), set_config('statement_timeout', '30s', true)`;
+    await applyLimits(t);
     await t`select pg_advisory_xact_lock(${WORLD_LOCK})`;
     return fn(t);
   }) as Promise<T>;
@@ -35,6 +48,7 @@ export function tx<T>(fn: (t: Tx) => Promise<T>): Promise<T> {
 /** 잠금을 기다리지 않고, 다른 요청이 잡고 있으면 null (주기 처리를 여러 요청이 동시에 하지 않도록) */
 export function tryTx<T>(fn: (t: Tx) => Promise<T>): Promise<T | null> {
   return db().begin(async (t) => {
+    await applyLimits(t);
     const [r] = await t<{ ok: boolean }[]>`select pg_try_advisory_xact_lock(${WORLD_LOCK}) as ok`;
     if (!r.ok) return null;
     return fn(t);

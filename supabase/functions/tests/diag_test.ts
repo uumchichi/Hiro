@@ -65,6 +65,68 @@ Deno.test({ name: "오류 이유는 운영자 키가 있는 요청에만 보여�
   assert((await call("GET", "/state", user)).status === 200, "되돌린 뒤 다시 200");
 } });
 
+import postgres from "postgres";
+
+Deno.test({ name: "DB 잠금을 쥔 채 멈춘 연결이 있어도: 요청은 빨리 포기하고, 점검은 죽지 않고 원인을 보여주고, DB가 스스로 정리해요", ...opts, fn: async () => {
+  Deno.env.set("HIRO_LOCK_TIMEOUT_MS", "700");
+  const WORLD_LOCK = 4_747_001;
+  const url = Deno.env.get("HIRO_DB_URL")!;
+  const stuck = postgres(url, { max: 1, prepare: false, onnotice: () => {} });
+  const uid = crypto.randomUUID();
+  let release: () => void = () => {};
+  const gate = new Promise<void>((r) => (release = r));
+  // 서버 함수가 중간에 꺼진 상황을 흉내 내요: 잠금을 쥔 채 트랜잭션이 열려 있고 아무것도 하지 않아요.
+  const holding = stuck.begin(async (t) => {
+    await t`select pg_advisory_xact_lock(${WORLD_LOCK})`;
+    await gate;
+  });
+  await new Promise((r) => setTimeout(r, 300));
+  try {
+    const t0 = performance.now();
+    const blocked = await call("GET", "/state", { "x-test-auth-id": uid });
+    const waited = performance.now() - t0;
+    assert(blocked.status === 500, "잠금이 막혀 있으면 500으로 빨리 포기해요 " + blocked.status);
+    assert(waited < 4000, `오래 기다리지 않아요 (${Math.round(waited)}ms)`);
+    const t1 = performance.now();
+    const diag = await call("GET", "/diag");
+    assert(performance.now() - t1 < 15000, "점검은 15초 안에 끝나요");
+    assert(diag.status === 200 && diag.body["2_transaction_lock"].ok === false, "막힌 단계를 알려줘요 " + JSON.stringify(diag.body["2_transaction_lock"]));
+    assert(diag.body["0_db_activity"].ok && diag.body["0_db_activity"].advisoryLocksHeld >= 1, "열려 있는 잠금이 보여요 " + JSON.stringify(diag.body["0_db_activity"]));
+    assert(diag.body["0_db_activity"].sessions.every((x: { query?: string }) => x.query === undefined), "키 없는 점검에는 쿼리 글이 없어요");
+  } finally {
+    release();
+    await holding.catch(() => {});
+    await stuck.end({ timeout: 2 });
+    Deno.env.delete("HIRO_LOCK_TIMEOUT_MS");
+  }
+  assert((await call("GET", "/state", { "x-test-auth-id": uid })).status === 200, "잠금이 풀리면 바로 200");
+} });
+
+Deno.test({ name: "클라이언트가 사라져 트랜잭션이 열린 채 남으면 DB가 스스로 닫고 잠금이 풀려요", ...opts, fn: async () => {
+  const WORLD_LOCK = 4_747_001;
+  const url = Deno.env.get("HIRO_DB_URL")!;
+  const zombie = postgres(url, { max: 1, prepare: false, onnotice: () => {} });
+  // 우리 서버 함수의 트랜잭션처럼 idle 제한(1초)을 걸고 잠금을 쥔 뒤, 클라이언트가 응답 없이 멈춘 상황
+  const gate = new Promise<void>(() => {}); // 영영 풀리지 않음
+  void zombie.begin(async (t) => {
+    await t`select set_config('idle_in_transaction_session_timeout', '1000ms', true)`;
+    await t`select pg_advisory_xact_lock(${WORLD_LOCK})`;
+    await gate;
+  }).catch(() => {});
+  await new Promise((r) => setTimeout(r, 300));
+  Deno.env.set("HIRO_LOCK_TIMEOUT_MS", "6000");
+  try {
+    const t0 = performance.now();
+    const r = await call("GET", "/state", { "x-test-auth-id": crypto.randomUUID() });
+    const took = performance.now() - t0;
+    assert(r.status === 200, "DB가 멈춘 트랜잭션을 닫아서 요청이 성공해요 " + r.status);
+    assert(took > 500 && took < 5000, `1~2초쯤 기다린 뒤 성공해요 (${Math.round(took)}ms)`);
+  } finally {
+    Deno.env.delete("HIRO_LOCK_TIMEOUT_MS");
+    await zombie.end({ timeout: 1 }).catch(() => {});
+  }
+} });
+
 Deno.test({ name: "정리", ...opts, fn: async () => {
   await closeDb();
 } });
