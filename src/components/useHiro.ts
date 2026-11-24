@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ViewState } from "@/lib/server";
+import { apiFetch } from "@/lib/api";
 
 export type { ViewState };
 
@@ -20,7 +21,7 @@ export function useHiro(pollMs?: number, opts?: { presence?: boolean }) {
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch(presence ? "/api/state?presence=1" : "/api/state", { cache: "no-store" });
+      const res = await apiFetch(presence ? "/api/state?presence=1" : "/api/state", { cache: "no-store" });
       if (res.ok) apply(await res.json());
     } catch {
       /* 다음 폴링에서 재시도 */
@@ -37,7 +38,7 @@ export function useHiro(pollMs?: number, opts?: { presence?: boolean }) {
   const post = useCallback(
     async (url: string, body?: unknown) => {
       setError(null);
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body ?? {}),

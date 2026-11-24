@@ -14,6 +14,7 @@ import { ConnectionState, Track } from "livekit-client";
 import { useEffect, useRef, useState } from "react";
 import { MicButton } from "./MicButton";
 import { VoiceOrb } from "./VoiceOrb";
+import { apiFetch } from "@/lib/api";
 
 export interface OrbPeople {
   partnerName: string;
@@ -75,7 +76,7 @@ export default function VoiceRoom({ room, ...people }: { room: string } & OrbPeo
     let cancelled = false;
     setConn(null);
     setErr(null);
-    fetch("/api/voice/token", { method: "POST" })
+    apiFetch("/api/voice/token", { method: "POST" })
       .then(async (r) => {
         const d = await r.json();
         if (cancelled) return;

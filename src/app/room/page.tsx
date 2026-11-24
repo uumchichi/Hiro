@@ -21,7 +21,7 @@ export default function RoomPage() {
   useEffect(() => {
     if (!state || group) return;
     // 로테이션이 끝나면 리포트로, 아니면 대기실로
-    router.replace(state.lastReportId ? `/report/${state.lastReportId}` : "/lobby");
+    router.replace(state.lastReportId ? `/report?id=${state.lastReportId}` : "/lobby");
   }, [state, group, router]);
 
   if (!state || !group) return <p className="pt-10 text-center text-muted">불러오는 중…</p>;

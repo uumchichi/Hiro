@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { MemberCard } from "@/components/MemberCard";
 import { fmtRemain } from "@/components/time";
 import type { PublicMember } from "@/lib/server";
+import { apiFetch } from "@/lib/api";
 
 interface Report {
   id: string;
@@ -35,8 +36,17 @@ interface Report {
   };
 }
 
-export default function ReportPage() {
-  const { id } = useParams<{ id: string }>();
+// 주소: /report?id=… (정적 사이트에서도 열리도록 id를 주소 뒤에 붙여요)
+export default function ReportPageWrapper() {
+  return (
+    <Suspense>
+      <ReportPage />
+    </Suspense>
+  );
+}
+
+function ReportPage() {
+  const id = useSearchParams().get("id") ?? "";
   const [r, setR] = useState<Report | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [confirmIdx, setConfirmIdx] = useState<number | null>(null);
@@ -46,7 +56,7 @@ export default function ReportPage() {
   const [straightConfirm, setStraightConfirm] = useState(false);
 
   const load = useCallback(async () => {
-    const res = await fetch(`/api/report/${id}`, { cache: "no-store" });
+    const res = await apiFetch(`/api/report/${id}`, { cache: "no-store" });
     const d = await res.json().catch(() => ({}));
     if (res.ok) setR(d);
     else setErr(d.error ?? "리포트를 불러오지 못했어요.");
@@ -60,7 +70,7 @@ export default function ReportPage() {
 
   async function reveal(index: number) {
     setBusy(true);
-    const res = await fetch(`/api/report/${id}/reveal`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ index }) });
+    const res = await apiFetch(`/api/report/${id}/reveal`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ index }) });
     const d = await res.json().catch(() => ({}));
     if (!res.ok) setErr(d.error ?? "실패했어요.");
     setConfirmIdx(null);
@@ -71,7 +81,7 @@ export default function ReportPage() {
   async function straight(body: unknown) {
     setBusy(true);
     setErr(null);
-    const res = await fetch(`/api/report/${id}/straight`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const res = await apiFetch(`/api/report/${id}/straight`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     const d = await res.json().catch(() => ({}));
     if (!res.ok) setErr(d.error ?? "실패했어요.");
     setStraightConfirm(false);
@@ -132,7 +142,7 @@ export default function ReportPage() {
             </>
           )}
           {st.status === "accepted" && st.chatId && (
-            <Link href={`/chat/${st.chatId}`} className="btn-primary w-full">
+            <Link href={`/chat?id=${st.chatId}`} className="btn-primary w-full">
               채팅방 열기
             </Link>
           )}
@@ -147,7 +157,7 @@ export default function ReportPage() {
           <p className="text-4xl">💞</p>
           <h2 className="text-xl font-extrabold">서로의 쪽지 주인을 찾았어요!</h2>
           <p className="text-sm text-muted">둘만의 채팅방이 열렸어요. 채팅방은 {fmtRemain(r.chat.expiresAt - Date.now())} 뒤 자동으로 사라져요.</p>
-          <Link href={`/chat/${r.chat.id}`} className="btn-primary">
+          <Link href={`/chat?id=${r.chat.id}`} className="btn-primary">
             채팅방 열기
           </Link>
         </section>
@@ -201,7 +211,7 @@ export default function ReportPage() {
               </p>
               {r.straight.sent.status === "pending" && <p className="mt-1 text-muted">답을 기다리고 있어요. 최대 24시간이 걸릴 수 있어요.</p>}
               {r.straight.sent.status === "accepted" && r.straight.sent.chatId && (
-                <Link href={`/chat/${r.straight.sent.chatId}`} className="btn-primary mt-3 w-full">
+                <Link href={`/chat?id=${r.straight.sent.chatId}`} className="btn-primary mt-3 w-full">
                   수락했어요! 채팅방 열기
                 </Link>
               )}

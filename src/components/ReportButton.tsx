@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { REPORT_REASONS } from "@/lib/reports";
+import { apiFetch } from "@/lib/api";
 
 /** 공개 ID로 신고하기. code를 주면 그 사람으로 고정, 없으면 ID를 직접 입력해요. */
 export function ReportButton({ code, nickname, context = "", className = "" }: { code?: string; nickname?: string; context?: string; className?: string }) {
@@ -15,7 +16,7 @@ export function ReportButton({ code, nickname, context = "", className = "" }: {
   async function submit() {
     setState("sending");
     setErr(null);
-    const res = await fetch("/api/reports", {
+    const res = await apiFetch("/api/reports", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ code: target, reason, detail, context }),

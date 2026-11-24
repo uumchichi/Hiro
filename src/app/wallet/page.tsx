@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { WalletView } from "@/lib/wallet";
+import { apiFetch } from "@/lib/api";
 
 const ITEM = { doki: "도키", ticket: "입장권", badge: "직진러의 증표" } as const;
 const KIND: Record<string, string> = { starter: "가입 선물", grant: "지급", charge: "충전", exchange: "바꾸기", use: "사용", release: "돌려받음" };
@@ -12,7 +13,7 @@ export default function WalletPage() {
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    const res = await fetch("/api/wallet", { cache: "no-store" });
+    const res = await apiFetch("/api/wallet", { cache: "no-store" });
     if (res.ok) setW(await res.json());
   }, []);
   useEffect(() => {
@@ -22,7 +23,7 @@ export default function WalletPage() {
   async function swap(item: "ticket" | "badge", count: number) {
     setBusy(true);
     setMsg(null);
-    const res = await fetch("/api/wallet", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "exchange", item, count }) });
+    const res = await apiFetch("/api/wallet", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "exchange", item, count }) });
     const d = await res.json().catch(() => ({}));
     if (d.doki !== undefined) setW(d);
     setMsg(res.ok ? `${ITEM[item]} ${count}개로 바꿨어요.` : (d.error ?? "바꾸지 못했어요."));
@@ -32,7 +33,7 @@ export default function WalletPage() {
   async function toggleAuto(on: boolean) {
     // 바로 반영하고, 서버 저장이 실패하면 되돌려요.
     setW((cur) => (cur ? { ...cur, autoExchange: on } : cur));
-    const res = await fetch("/api/wallet", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "autoExchange", on }) }).catch(() => null);
+    const res = await apiFetch("/api/wallet", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "autoExchange", on }) }).catch(() => null);
     if (res?.ok) {
       setW(await res.json());
       setMsg(on ? "자동 교환을 켰어요." : "자동 교환을 껐어요.");

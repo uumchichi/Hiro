@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { PublicMember } from "@/lib/server";
+import { apiFetch } from "@/lib/api";
 
 type Entry = { member: PublicMember; letter: string; memo: string };
 type Draft = { letter: string; memo: string; saved: "idle" | "saving" | "saved" | "error" };
@@ -32,7 +33,7 @@ export function NotesPanel({ groupId, met, focusId }: { groupId: string; met: En
     setDrafts((cur) => ({ ...cur, [id]: { ...cur[id], [field]: value, saved: "saving" } }));
     clearTimeout(timers.current[id + field]);
     timers.current[id + field] = setTimeout(async () => {
-      const res = await fetch("/api/notes", {
+      const res = await apiFetch("/api/notes", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ groupId, to: id, [field]: value }),

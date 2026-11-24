@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { PublicMember } from "@/lib/server";
+import { apiFetch } from "@/lib/api";
 
 interface Records {
   now: number;
@@ -14,7 +15,7 @@ export default function RecordsPage() {
   const [r, setR] = useState<Records | null>(null);
   useEffect(() => {
     const load = () =>
-      fetch("/api/records", { cache: "no-store" })
+      apiFetch("/api/records", { cache: "no-store" })
         .then((res) => res.json())
         .then(setR)
         .catch(() => {});
@@ -37,7 +38,7 @@ export default function RecordsPage() {
         <h2 className="font-bold">📋 로테이션 리포트</h2>
         {r.groups.length === 0 && <p className="text-sm text-muted">아직 끝난 로테이션이 없어요.</p>}
         {r.groups.map((g) => (
-          <Link key={g.id} href={`/report/${g.id}`} className="card flex items-center justify-between gap-3">
+          <Link key={g.id} href={`/report?id=${g.id}`} className="card flex items-center justify-between gap-3">
             <div>
               <p className="font-bold">
                 {g.theme.emoji} {g.theme.title}

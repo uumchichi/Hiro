@@ -143,10 +143,23 @@ HIRO_DB_URL="$DB" HIRO_TEST_AUTH=1 deno test -A --config api/deno.json tests/
 
 `HIRO_TEST_AUTH=1`은 테스트에서 로그인 없이 사용자를 지정하는 설정이에요. **배포 환경에는 절대 넣지 마세요.**
 
+## 배포 (GitHub + Supabase)
+
+main 브랜치에 올라가면 `.github/workflows/deploy.yml`이 순서대로 해요: 검사(CI) → DB 마이그레이션 → 서버 함수 `api` 배포 → 화면을 GitHub Pages에 올리기.
+
+1. 저장소 Settings → **Actions** → Allow all actions, **Pages** → Source를 *GitHub Actions*로.
+2. Settings → Secrets and variables → Actions
+   - Secrets: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`
+   - Variables: `SUPABASE_PROJECT_REF`, `SUPABASE_URL`, `SUPABASE_ANON_KEY` (publishable 키)
+3. Supabase: Authentication → **Anonymous sign-ins** 켜기, Edge Functions → Secrets에 `HIRO_ADMIN_KEY`, `HIRO_CRON_KEY` (선택: `ANTHROPIC_API_KEY`, `LIVEKIT_*`).
+4. 첫 배포 뒤 SQL Editor에서 `supabase/setup/cron.sql`의 안내대로 1분 작업 켜기.
+
+화면은 서버 없는 정적 사이트예요 (`npm run build:static` → `out/`). 처음 들어오면 Supabase 익명 로그인을 하고, API는 서버 함수로 불러요 (`src/lib/api.ts`).
+`npm run dev`로는 예전처럼 Next 서버와 쿠키로 동작해요. `/report?id=…`, `/chat?id=…`처럼 id는 주소 뒤에 붙어요.
+
 ## 정식 서비스 전에 할 일
 
 - **본인인증**(PASS 등)으로 여성·성인 확인. 지금은 체크박스로만 확인해요.
 - **화면을 Supabase로 연결**: 서버 함수는 준비됐어요. 화면(GitHub Pages)이 익명 로그인 + 서버 함수 주소를 쓰도록 바꾸는 단계가 남았어요.
 - **로그인**(카카오/애플), 차단, 대화 중 비상 종료 버튼.
 - 초대장·예약 알림(웹 푸시·카카오 알림톡). 지금은 히로 화면을 켜 둬야 바로 시작 초대장이 보여요.
-- 배포 서버 시간대를 `TZ=Asia/Seoul`로 설정하기 (예약 시간 계산이 서버 시간 기준이에요).

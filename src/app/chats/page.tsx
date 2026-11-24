@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { ReportButton } from "@/components/ReportButton";
 import { fmtRemain } from "@/components/time";
 import type { PublicMember } from "@/lib/server";
+import { apiFetch } from "@/lib/api";
 
 interface ChatItem {
   id: string;
@@ -25,7 +26,7 @@ export default function ChatsPage() {
 
   useEffect(() => {
     const load = () =>
-      fetch("/api/records", { cache: "no-store" })
+      apiFetch("/api/records", { cache: "no-store" })
         .then((r) => r.json())
         .then((d) => {
           setOffset(d.now - Date.now());
@@ -56,7 +57,7 @@ export default function ChatsPage() {
         <section className="space-y-2">
           <h2 className="font-bold">💘 받은 직진</h2>
           {data.straights.map((st) => (
-            <Link key={st.groupId + st.from.id} href={`/report/${st.groupId}`} className="card flex items-center justify-between gap-3 border-[var(--tek)] !p-4">
+            <Link key={st.groupId + st.from.id} href={`/report?id=${st.groupId}`} className="card flex items-center justify-between gap-3 border-[var(--tek)] !p-4">
               <div className="min-w-0">
                 <p className="font-bold">
                   {st.from.emoji} {st.from.nickname}님이 직진했어요
@@ -83,7 +84,7 @@ export default function ChatsPage() {
             const soon = remain < 3 * 3600_000;
             return (
               <li key={c.id} className="card flex items-center gap-3 !p-4">
-                <Link href={`/chat/${c.id}`} className="flex min-w-0 flex-1 items-center gap-3">
+                <Link href={`/chat?id=${c.id}`} className="flex min-w-0 flex-1 items-center gap-3">
                   <span
                     className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-brand-soft text-2xl"
                     style={c.other.tgColor ? { boxShadow: `0 0 0 3px ${c.other.tgColor}` } : undefined}

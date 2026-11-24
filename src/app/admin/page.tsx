@@ -6,6 +6,7 @@ import { fmtUntil, fmtWhen } from "@/components/useSlots";
 import { fmtSlotTime } from "@/lib/schedule";
 import { EventForm } from "@/components/EventForm";
 import type { Theme } from "@/lib/types";
+import { apiFetch } from "@/lib/api";
 
 interface Overview {
   now: number;
@@ -70,7 +71,7 @@ export default function AdminPage() {
   }, []);
 
   const load = useCallback(async () => {
-    const res = await fetch("/api/admin/overview", { headers: { "x-admin-key": key }, cache: "no-store" });
+    const res = await apiFetch("/api/admin/overview", { headers: { "x-admin-key": key }, cache: "no-store" });
     const d = await res.json();
     if (!res.ok) {
       setMsg(d.error);
@@ -87,7 +88,7 @@ export default function AdminPage() {
   async function call(url: string, body: unknown, label: string, done?: string) {
     setBusy(label);
     setMsg(null);
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       method: "POST",
       headers: { "content-type": "application/json", "x-admin-key": key },
       body: JSON.stringify(body),

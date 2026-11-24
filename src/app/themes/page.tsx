@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { useHiro, useTick } from "@/components/useHiro";
 import { fmtUntil, fmtWhen, useSlots, type SlotView } from "@/components/useSlots";
 import { estimateRange } from "@/lib/estimate";
+import { apiFetch } from "@/lib/api";
 
 export default function ThemesPage() {
   const router = useRouter();
@@ -25,7 +26,7 @@ export default function ThemesPage() {
   async function apply(s: SlotView, on: boolean) {
     setBusy(s.id);
     setError(null);
-    const res = await fetch("/api/slots/apply", {
+    const res = await apiFetch("/api/slots/apply", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ slotId: s.id, on }),

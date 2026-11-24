@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { estimateRange } from "@/lib/estimate";
 import { TAG_GROUPS } from "@/lib/questions";
+import { apiFetch } from "@/lib/api";
 
 /** 운영진이 테마를 기획해 특정 날짜·시간에 여는 이벤트 */
 export function EventForm({
@@ -40,7 +41,7 @@ export function EventForm({
       return;
     }
     setBusy(true);
-    const res = await fetch("/api/admin/event", {
+    const res = await apiFetch("/api/admin/event", {
       method: "POST",
       headers: { "content-type": "application/json", "x-admin-key": adminKey },
       body: JSON.stringify({

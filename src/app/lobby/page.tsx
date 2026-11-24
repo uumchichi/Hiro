@@ -8,6 +8,7 @@ import { fmtUntil } from "@/components/useSlots";
 import type { LobbyView } from "@/lib/lobby";
 import { fmtSlotTime } from "@/lib/schedule";
 import { estimateExact, estimateRange } from "@/lib/estimate";
+import { apiFetch } from "@/lib/api";
 
 /** 초대장이 오면 짧은 알림음 + 진동 + 탭 제목 */
 function notify() {
@@ -50,7 +51,7 @@ export default function LobbyPage() {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch("/api/lobby", { cache: "no-store" });
+      const res = await apiFetch("/api/lobby", { cache: "no-store" });
       if (res.ok) apply(await res.json());
     } catch {}
   }, [apply]);
@@ -59,7 +60,7 @@ export default function LobbyPage() {
     async (url: string, body: unknown) => {
       setBusy(true);
       setErr(null);
-      const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      const res = await apiFetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
       const d = await res.json().catch(() => ({}));
       if (d.now) apply(d);
       if (!res.ok) setErr(d.error ?? "문제가 생겼어요.");

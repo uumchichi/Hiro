@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
-import { currentUserId } from "@/lib/server";
-import { readDb } from "@/lib/store";
+import { ChatBadge } from "@/components/NavBadge";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -11,19 +10,7 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#9b5cff" };
 
-export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  // 열려 있는 채팅방 + 받은 직진 수 (메뉴 배지)
-  const uid = await currentUserId();
-  const now = Date.now();
-  const db = readDb();
-  const openChats = uid
-    ? Object.values(db.chats).filter((c) => c.members.includes(uid) && c.expiresAt > now).length +
-      // 응답을 기다리는 직진도 함께 셉니다
-      Object.values(db.groups).reduce(
-        (n, g) => n + Object.values(g.straights ?? {}).filter((st) => st.to === uid && st.status === "pending" && st.expiresAt > now).length,
-        0,
-      )
-    : 0;
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="ko">
       <head>
@@ -43,9 +30,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             <Link href="/themes" className="hover:text-ink">이벤트</Link>
             <Link href="/chats" className="relative hover:text-ink">
               채팅
-              {openChats > 0 && (
-                <span className="absolute -right-3 -top-2 grid h-4 min-w-4 place-items-center rounded-full bg-brand px-1 text-[10px] font-bold text-brand-ink">{openChats}</span>
-              )}
+              <ChatBadge />
             </Link>
             <Link href="/records" className="pl-1 hover:text-ink">기록</Link>
             <Link href="/me" className="hover:text-ink">나</Link>

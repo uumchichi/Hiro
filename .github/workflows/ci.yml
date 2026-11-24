@@ -3,6 +3,7 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_call: # 배포(deploy.yml)가 먼저 이 검사를 통과시켜요
 
 jobs:
   check:
@@ -59,3 +60,11 @@ jobs:
       - run: npx tsc --noEmit
       - run: npm run lint
       - run: npm run build
+      # GitHub Pages용 정적 사이트가 만들어지는지 (주소 값은 확인용 가짜 값이에요)
+      - name: Static site build
+        run: npm run build:static
+        env:
+          NEXT_PUBLIC_API_BASE: https://example.supabase.co/functions/v1/api
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder
+          NEXT_PUBLIC_BASE_PATH: /Hiro

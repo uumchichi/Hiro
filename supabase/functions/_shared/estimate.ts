@@ -1,3 +1,4 @@
+import { kst } from "./schedule.ts";
 // 로테이션 예상 라운드 수와 시간
 // 짝수 인원: 인원-1 라운드 (모두가 서로 한 번씩). 홀수 인원: 인원과 같은 수의 라운드 (라운드마다 한 명씩 쉬어요).
 
@@ -65,7 +66,6 @@ export function estimateMine(myPartners: number, rounds: number, roundSeconds: n
 }
 
 export function fmtClockTime(ts: number) {
-  const d = new Date(ts);
-  const h = d.getHours();
-  return `${h < 12 ? "오전" : "오후"} ${h % 12 === 0 ? 12 : h % 12}:${String(d.getMinutes()).padStart(2, "0")}`;
+  const { hour: h, minute } = kst(ts); // 항상 한국 시간
+  return `${h < 12 ? "오전" : "오후"} ${h % 12 === 0 ? 12 : h % 12}:${String(minute).padStart(2, "0")}`;
 }

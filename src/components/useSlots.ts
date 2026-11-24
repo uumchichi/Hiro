@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { apiFetch } from "@/lib/api";
 
 export interface SlotView {
   id: string;
@@ -29,7 +30,7 @@ export function useSlots(pollMs = 5000) {
   const [offset, setOffset] = useState(0);
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch("/api/slots", { cache: "no-store" });
+      const res = await apiFetch("/api/slots", { cache: "no-store" });
       if (res.ok) {
         const d: SlotsResponse = await res.json();
         setOffset(d.now - Date.now());

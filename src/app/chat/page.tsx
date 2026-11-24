@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { ReportButton } from "@/components/ReportButton";
 import { fmtRemain } from "@/components/time";
 import { UserCode } from "@/components/UserCode";
 import type { PublicMember } from "@/lib/server";
+import { apiFetch } from "@/lib/api";
 
 interface ChatView {
   now: number;
@@ -26,8 +27,17 @@ const PRIVATE_PATTERNS = [
   /(아이디|id)\s*[:：은는]/i,
 ];
 
-export default function ChatPage() {
-  const { id } = useParams<{ id: string }>();
+// 주소: /chat?id=… (정적 사이트에서도 열리도록 id를 주소 뒤에 붙여요)
+export default function ChatPageWrapper() {
+  return (
+    <Suspense>
+      <ChatPage />
+    </Suspense>
+  );
+}
+
+function ChatPage() {
+  const id = useSearchParams().get("id") ?? "";
   const [chat, setChat] = useState<ChatView | null>(null);
   const [gone, setGone] = useState<string | null>(null);
   const [text, setText] = useState("");
@@ -38,7 +48,7 @@ export default function ChatPage() {
   const lastCount = useRef(0);
 
   const load = useCallback(async () => {
-    const res = await fetch(`/api/chat/${id}`, { cache: "no-store" });
+    const res = await apiFetch(`/api/chat/${id}`, { cache: "no-store" });
     const d = await res.json().catch(() => ({}));
     if (res.ok) {
       setOffset(d.now - Date.now());
@@ -68,7 +78,7 @@ export default function ChatPage() {
     }
     setWarn(false);
     setBusy(true);
-    const res = await fetch(`/api/chat/${id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: t }) });
+    const res = await apiFetch(`/api/chat/${id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: t }) });
     const d = await res.json().catch(() => ({}));
     if (res.ok) {
       setChat(d);
