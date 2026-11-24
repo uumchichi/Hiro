@@ -1,6 +1,6 @@
 // 도키 지갑: 도키를 🎟️ 입장권 / 💘 직진러의 증표로 바꿔 써요.
-// · 입장권: 로테이션 1회에 1장. 그룹에 들어가면 맡아 두고, 첫 1:1 대화가 실제로 이어졌을 때 차감해요.
-//   대화가 성사되지 않으면(오류, 상대 없음, 시작 전 이탈) 로테이션이 끝날 때 돌려줘요.
+// · 입장권: 1:1 대화 1번에 1장. 그룹에 들어가면 나와 대화할 사람 수만큼 예치하고,
+//   대화가 실제로 이어질 때마다 그 상대 몫 1장씩 차감해요. 남은 건 로테이션이 끝날 때 돌려줘요.
 // · 직진러의 증표: 직진 1회에 1개. 보낼 때 맡아 두고, 상대가 수락하면 차감, 거절·만료면 돌려줘요.
 import { mutate, newId, readDb } from "./store";
 import type { DB, User, Wallet, WalletItem } from "./types";
@@ -29,7 +29,7 @@ function priceOf(item: "ticket" | "badge", count: number) {
   return bundles(item).find((b) => b.count === count)?.price ?? null;
 }
 export const STARTER = {
-  tickets: () => Number(process.env.HIRO_STARTER_TICKETS ?? 3),
+  tickets: () => Number(process.env.HIRO_STARTER_TICKETS ?? 5),
   badges: () => Number(process.env.HIRO_STARTER_BADGES ?? 1),
 };
 /** 첫 1:1 대화가 이만큼 이어지면 입장권을 차감해요. */
@@ -85,12 +85,46 @@ function spendDoki(db: DB, userId: string, w: Wallet, item: "ticket" | "badge", 
   return true;
 }
 
-/** 지금 쓸 수 있거나, 자동 교환으로 바로 마련할 수 있는지 (입장·신청 조건) */
-export function canAfford(db: DB, userId: string, item: "ticket" | "badge") {
-  if (available(db, userId, item) >= 1) return true;
+/** count개를 지금 쓸 수 있거나, 모자란 만큼 자동 교환으로 바로 마련할 수 있는지 */
+export function canAfford(db: DB, userId: string, item: "ticket" | "badge", count = 1) {
+  if (db.users[userId]?.isDemo) return true;
+  const short = count - available(db, userId, item);
+  if (short <= 0) return true;
   const w = db.users[userId]?.wallet;
   if (!w || w.autoExchange === false) return false;
-  return w.freeDoki + w.paidDoki >= (item === "ticket" ? PRICE.ticket() : PRICE.badge());
+  return w.freeDoki + w.paidDoki >= short * (item === "ticket" ? PRICE.ticket() : PRICE.badge());
+}
+
+/**
+ * 여러 개를 한꺼번에 맡아요 (전부 아니면 전무). 모자란 만큼은 자동 교환으로 한 번에 바꿔요.
+ * 실패하면 아무것도 바뀌지 않아요. 이미 맡긴 ref는 건너뛰어요.
+ */
+export function holdMany(db: DB, userId: string, item: "ticket" | "badge", refs: string[], note: string): boolean {
+  const w = ensureWallet(db, userId);
+  if (!w) return true; // 데모
+  const todo = refs.filter((r) => !w.holds[r]);
+  if (!todo.length) return true;
+  const short = todo.length - available(db, userId, item);
+  if (short > 0) {
+    const unit = item === "ticket" ? PRICE.ticket() : PRICE.badge();
+    if (w.autoExchange === false || !spendDoki(db, userId, w, item, short, unit * short, " (자동 교환)")) return false;
+  }
+  const at = Date.now();
+  for (const r of todo) w.holds[r] = { item, at };
+  log(db, userId, "hold", item, 0, `${note} (${todo.length}개)`);
+  return true;
+}
+
+/** ref가 prefix로 시작하는 맡긴 아이템을 모두 돌려줘요. 돌려준 개수를 한 줄로 기록해요. */
+export function releasePrefix(db: DB, userId: string, prefix: string, note: (n: number) => string) {
+  const w = db.users[userId]?.wallet;
+  if (!w) return 0;
+  const refs = Object.keys(w.holds).filter((r) => r === prefix || r.startsWith(prefix + ":"));
+  if (!refs.length) return 0;
+  const item = w.holds[refs[0]].item;
+  for (const r of refs) delete w.holds[r];
+  log(db, userId, "release", item, 0, note(refs.length), prefix);
+  return refs.length;
 }
 
 /**

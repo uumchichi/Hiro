@@ -149,13 +149,12 @@ export function viewState(userId: string) {
       ? {
           tickets: walletAvailable(db, userId, "ticket"),
           badges: walletAvailable(db, userId, "badge"),
-          // 지금 그룹의 입장권: 맡아 둠(아직 차감 전) / 사용됨
+          // 지금 그룹의 입장권: 예치한 것(아직 차감 전)과 사용한 것
           groupTicket: user.groupId
-            ? user.wallet.holds[`group:${user.groupId}`]
-              ? "held"
-              : db.ledger.some((t) => t.userId === userId && t.ref === `group:${user.groupId}` && t.kind === "use")
-                ? "used"
-                : null
+            ? {
+                held: Object.keys(user.wallet.holds).filter((r) => r.startsWith(`group:${user.groupId}`)).length,
+                used: db.ledger.filter((t) => t.userId === userId && t.kind === "use" && t.ref?.startsWith(`group:${user.groupId}`)).length,
+              }
             : null,
         }
       : null,

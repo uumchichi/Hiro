@@ -56,7 +56,7 @@ export default function WalletPage() {
           <div className="rounded-2xl bg-white/15 px-4 py-3 backdrop-blur">
             <p className="text-xs text-white/85">🎟️ 입장권</p>
             <p className="text-2xl font-extrabold tabular-nums">{w.tickets}장</p>
-            {w.heldTickets > 0 && <p className="text-xs text-white/85">그중 {w.heldTickets}장은 진행 중인 로테이션에 맡겨 둠</p>}
+            {w.heldTickets > 0 && <p className="text-xs text-white/85">그중 {w.heldTickets}장은 진행 중인 로테이션에 예치 중</p>}
           </div>
           <div className="rounded-2xl bg-white/15 px-4 py-3 backdrop-blur">
             <p className="text-xs text-white/85">💘 직진러의 증표</p>
@@ -73,7 +73,7 @@ export default function WalletPage() {
         <p className="text-sm text-muted">많이 바꿀수록 할인돼요. 바꾼 입장권·증표는 도키로 되돌리거나 환불할 수 없어요.</p>
         {(
           [
-            ["ticket", "🎟️ 입장권", `로테이션 1회에 1장. 첫 1:1 대화가 ${w.ticketAfterSeconds}초 이상 이어졌을 때 차감돼요. 오류나 대화 상대가 없어 성사되지 않으면 돌려드려요.`],
+            ["ticket", "🎟️ 입장권", `1:1 대화 1번에 1장. 그룹에 들어갈 때 나와 대화할 사람 수만큼 예치하고, 대화가 ${w.ticketAfterSeconds}초 이상 이어질 때마다 1장씩 차감돼요. 남은 건 로테이션이 끝나면 돌려드려요. 예치할 입장권이 모자라면 그 로테이션에는 들어갈 수 없어요.`],
             ["badge", "💘 직진러의 증표", "직진 1회에 1개. 상대가 수락했을 때 차감되고, 거절하거나 응답이 없으면 돌려드려요."],
           ] as const
         ).map(([item, name, desc]) => (
@@ -107,7 +107,7 @@ export default function WalletPage() {
             onChange={(e) => toggleAuto(e.target.checked)}
           />
           <span>
-            <b>자동 교환</b>: 입장권이나 증표가 없을 때, 실제로 필요한 순간(그룹에 들어갈 때, 직진을 보낼 때)에만 도키로 1개를 바꿔요 (입장권 {w.prices.ticket}도키, 증표 {w.prices.badge}도키).
+            <b>자동 교환</b>: 입장권이나 증표가 모자랄 때, 실제로 필요한 순간(그룹에 들어갈 때, 직진을 보낼 때)에만 모자란 만큼 도키로 바꿔요 (입장권 1장 {w.prices.ticket}도키, 증표 1개 {w.prices.badge}도키).
           </span>
         </label>
       </section>

@@ -195,6 +195,7 @@ export default function LobbyPage() {
               </p>
               <p className="mt-1 text-xs text-muted">
                 ⏱️ 예상: {estimateRange(view.config.min, Math.min(view.config.max, s.invited), view.config.roundSeconds, view.config.breakSeconds).text}
+                <span className="block">🎟️ 대화할 사람 수만큼 입장권 예치 (최대 {Math.min(view.config.max, s.invited) - 1}장)</span>
               </p>
               {s.iAccepted ? (
                 <p className="mt-3 text-sm font-semibold">수락했어요! {view.config.min}명 이상 모이면 예약이 확정돼요.</p>
@@ -280,6 +281,9 @@ export default function LobbyPage() {
               )}
               <p className="rounded-2xl bg-bg px-3 py-2 text-center text-xs text-muted">
                 ⏱️ 예상: {estimateRange(view.config.min, Math.min(view.config.max, invite.invited), view.config.roundSeconds, view.config.breakSeconds).text}
+                <span className="block">
+                  🎟️ 1:1 대화 1번에 입장권 1장 · 대화할 사람 수만큼 예치 (최대 {Math.min(view.config.max, invite.invited) - 1}장), 남은 건 끝나면 돌려드려요
+                </span>
               </p>
               {invite.iAccepted ? (
                 <p className="text-center font-semibold">

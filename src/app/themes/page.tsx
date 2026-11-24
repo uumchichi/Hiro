@@ -59,7 +59,10 @@ export default function ThemesPage() {
         <p className="text-sm font-semibold">
           🕘 {fmtWhen(s.startsAt, now)} <span className="font-normal text-muted">({fmtUntil(s.startsAt - now)})</span>
         </p>
-        <p className="rounded-2xl bg-bg px-3 py-2 text-xs text-muted">⏱️ 예상: {est.text}</p>
+        <p className="rounded-2xl bg-bg px-3 py-2 text-xs text-muted">
+          ⏱️ 예상: {est.text}
+          <span className="block">🎟️ 1:1 대화 1번에 입장권 1장 (최대 {data.config.max - 1}장 예치, 남은 건 돌려드려요)</span>
+        </p>
         <div>
           <div className="h-2 overflow-hidden rounded-full bg-line">
             <div className="h-full bg-hiro" style={{ width: `${ratio * 100}%` }} />

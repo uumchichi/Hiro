@@ -1,6 +1,6 @@
 // 쪽지 · 메모 · 쪽지의 주인 찾기 · 24시간 채팅방
 import { currentPhase, partnerIn } from "./rotation";
-import { TICKET_AFTER_MS, available, canAfford, consume, hold, release } from "./wallet";
+import { TICKET_AFTER_MS, available, canAfford, consume, hold, release, releasePrefix } from "./wallet";
 import { mutate, newId, readDb } from "./store";
 import type { Chat, DB, Group } from "./types";
 
@@ -66,7 +66,8 @@ export function finishGroup(db: DB, g: Group) {
   g.status = "done";
   g.finishedAt = Date.now();
   // 1:1 대화가 한 번도 성사되지 않은 사람의 입장권은 돌려줘요.
-  for (const id of g.memberIds) release(db, id, `group:${g.id}`, `'${g.theme.title}' 대화가 성사되지 않아 입장권을 돌려드렸어요`);
+  // 성사되지 않은 1:1 대화 몫의 입장권은 모두 돌려줘요.
+  for (const id of g.memberIds) releasePrefix(db, id, `group:${g.id}`, (n) => `'${g.theme.title}' 성사되지 않은 대화 ${n}번 몫의 입장권을 돌려드렸어요`);
   for (const id of g.memberIds) {
     const u = db.users[id];
     if (u && u.groupId === g.id) {
@@ -293,9 +294,15 @@ export function recordPresence(userId: string, now = Date.now()) {
     if (!other || now - other.last > 15_000) return;
     const since = Math.max(me.first, other.first, roundStart);
     if (now - since < TICKET_AFTER_MS()) return;
-    const ref = `group:${grp.id}`;
-    consume(db, userId, ref, `'${grp.theme.title}' 1:1 대화가 성사돼 입장권 사용`);
-    consume(db, partner, ref, `'${grp.theme.title}' 1:1 대화가 성사돼 입장권 사용`);
+    // 이 상대와의 대화 몫 1장씩 (예전 방식으로 맡긴 group:그룹 한 장도 함께 처리)
+    const myName = db.users[userId]?.profile?.nickname ?? "상대";
+    const theirName = db.users[partner]?.profile?.nickname ?? "상대";
+    if (!consume(db, userId, `group:${grp.id}:${partner}`, `'${grp.theme.title}' ${theirName}님과 대화가 성사돼 입장권 사용`)) {
+      consume(db, userId, `group:${grp.id}`, `'${grp.theme.title}' 1:1 대화가 성사돼 입장권 사용`);
+    }
+    if (!consume(db, partner, `group:${grp.id}:${userId}`, `'${grp.theme.title}' ${myName}님과 대화가 성사돼 입장권 사용`)) {
+      consume(db, partner, `group:${grp.id}`, `'${grp.theme.title}' 1:1 대화가 성사돼 입장권 사용`);
+    }
   });
 }
 

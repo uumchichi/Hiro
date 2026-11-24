@@ -48,6 +48,9 @@ export default function RoomPage() {
         <div className="mt-4 rounded-2xl bg-bg px-4 py-3 text-sm">
           <p className="font-semibold">⏱️ {estimateMine(group.myPartnerCount, group.roundCount, group.roundSeconds, group.breakSeconds)}</p>
           <p className="mt-1 text-xs text-muted">성향 조사에서 서로 원하는 분들끼리만 1:1로 대화해요. 상대가 없는 라운드는 쉬어요.</p>
+          <p className="mt-1 text-xs text-muted">
+            🎟️ 대화 1번에 입장권 1장, {group.myPartnerCount}장을 예치했어요. 성사된 대화만큼만 쓰이고 나머지는 돌려드려요.
+          </p>
           {group.startedAt && (
             <p className="mt-1 text-muted">
               {fmtClockTime(group.startedAt + durationForRounds(group.roundCount, group.roundSeconds, group.breakSeconds))}쯤 끝나요
@@ -79,9 +82,7 @@ export default function RoomPage() {
       </div>
       {state.wallet?.groupTicket && (
         <p className="text-xs text-muted">
-          {state.wallet.groupTicket === "used"
-            ? "🎟️ 1:1 대화가 성사돼 입장권 1장을 사용했어요."
-            : "🎟️ 입장권은 맡아 두기만 했어요. 첫 1:1 대화가 이어지면 그때 사용되고, 성사되지 않으면 돌려드려요."}
+          🎟️ 입장권 {state.wallet.groupTicket.used}장 사용 · {state.wallet.groupTicket.held}장 예치 중. 1:1 대화가 성사될 때마다 1장씩 쓰이고, 남은 건 끝나면 돌려드려요.
         </p>
       )}
       <div className="h-2 overflow-hidden rounded-full bg-line">
