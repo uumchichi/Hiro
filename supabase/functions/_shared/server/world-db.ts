@@ -39,6 +39,7 @@ export interface Loaded {
     reports: Map<string, string>;
     catalog: string;
     ticks: string;
+    ledgerLoaded: number; // 불러온 거래 기록 수 (그 뒤에 쌓인 것만 새로 저장해요)
   };
 }
 
@@ -67,6 +68,11 @@ export async function loadWorld(t: Tx | Sql): Promise<Loaded> {
       t<Row[]>`select * from reports order by at`,
       t<Row[]>`select * from ticks`,
     ]);
+  // 거래 기록은 많아서 다 불러오지 않아요. 진행 중인 그룹의 입장권 사용 기록만 (상태 화면의 '사용한 입장권')
+  const liveRefs = groups.filter((g) => g.status === "live").map((g) => `group:${g.id}:%`);
+  const ledger = liveRefs.length
+    ? await t<Row[]>`select * from ledger where kind = 'use' and ref like any(${liveRefs}) order by at, id`
+    : [];
 
   for (const r of users) db.users[r.id] = toUser(r);
   for (const w of wallets) {
@@ -220,6 +226,9 @@ export async function loadWorld(t: Tx | Sql): Promise<Loaded> {
     });
   }
   db.ticks = Object.fromEntries(ticks.map((x) => [x.key, ms(x.at)!]));
+  for (const l of ledger) {
+    db.ledger.push({ id: String(l.id), userId: l.user_id, at: ms(l.at)!, kind: l.kind, item: l.item, amount: l.amount, note: l.note, ref: l.ref ?? undefined });
+  }
 
   const snap: Loaded["snap"] = {
     users: new Map(Object.values(db.users).map((u) => [u.id, key(userCols(u))])),
@@ -234,6 +243,7 @@ export async function loadWorld(t: Tx | Sql): Promise<Loaded> {
     reports: new Map(db.reports.map((r) => [r.id, key(r)])),
     catalog: key([db.catalog, db.catalogCursor]),
     ticks: key(db.ticks),
+    ledgerLoaded: db.ledger.length,
   };
   return { db, snap };
 }
@@ -243,7 +253,7 @@ function userCols(u: User) {
   return rest;
 }
 
-/** 바뀐 것만 저장해요. 지갑 거래 기록(db.ledger)은 이번에 새로 생긴 것만 들어 있어서 모두 추가해요. */
+/** 바뀐 것만 저장해요. 지갑 거래 기록(db.ledger)은 덧붙이기만 하므로, 불러온 뒤에 생긴 것만 추가해요. */
 export async function saveWorld(t: Tx, { db, snap }: Loaded) {
   // ── 사용자 ──
   const usedCodes = new Set(Object.values(db.users).map((u) => u.code).filter(Boolean));
@@ -282,7 +292,7 @@ export async function saveWorld(t: Tx, { db, snap }: Loaded) {
     if (!u.wallet || snap.wallets.get(u.id) === key(u.wallet)) continue;
     await saveWallet(t, u.id, u.wallet);
   }
-  for (const tx of db.ledger) {
+  for (const tx of db.ledger.slice(snap.ledgerLoaded)) {
     await t`insert into ledger (user_id, at, kind, item, amount, note, ref)
       values (${tx.userId}, ${ts(tx.at)}, ${tx.kind}, ${tx.item}, ${tx.amount}, ${tx.note}, ${tx.ref ?? null})`;
   }

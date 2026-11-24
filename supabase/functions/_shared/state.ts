@@ -1,5 +1,5 @@
 // 상태 화면(내 정보·그룹·로테이션·지갑)과 그룹 마무리. Next 앱과 서버 함수가 함께 써요.
-import { env } from "./env.ts";
+import { livekitConfigured } from "./voice.ts";
 import { mdpLabel, normalizePrefs, normalizeTraits, tgColor, tgLabel } from "./compat.ts";
 import { finishGroup, metPartners } from "./notes.ts";
 import { available as walletAvailable } from "./wallet.ts";
@@ -7,9 +7,7 @@ import { currentPhase, partnerIn, roomName } from "./rotation.ts";
 import { mutate, readDb } from "./world.ts";
 import type { Group, User } from "./types.ts";
 
-export function livekitConfigured() {
-  return Boolean(env("LIVEKIT_API_KEY") && env("LIVEKIT_API_SECRET") && (env("LIVEKIT_URL") ?? env("NEXT_PUBLIC_LIVEKIT_URL")));
-}
+export { livekitConfigured };
 
 /** 끝난 로테이션을 시간에 맞춰 마무리합니다 (live → done, 쪽지 전달, 참가자 풀어 주기). */
 export function syncGroupStatus(group: Group) {

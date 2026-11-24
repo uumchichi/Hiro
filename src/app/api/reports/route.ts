@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { REPORT_REASONS } from "@/lib/reports";
+import { REPORT_REASONS, reportUser } from "@/lib/reports-server";
 import { ensureUser } from "@/lib/server";
-import { mutate, newId, normalizeCode } from "@/lib/store";
 
 const Body = z.object({
   code: z.string().min(4).max(8),
@@ -16,24 +15,7 @@ export async function POST(req: Request) {
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "신고 내용을 확인해 주세요." }, { status: 400 });
   const user = await ensureUser();
-  const code = normalizeCode(parsed.data.code);
-  const err = mutate((db) => {
-    const target = Object.values(db.users).find((u) => u.code === code);
-    if (!target) return "해당 ID의 사용자를 찾을 수 없어요.";
-    if (target.id === user.id) return "나 자신은 신고할 수 없어요.";
-    db.reports.push({
-      id: newId("rep"),
-      at: Date.now(),
-      reporterId: user.id,
-      targetCode: code,
-      targetId: target.id,
-      reason: parsed.data.reason,
-      detail: parsed.data.detail.trim(),
-      context: parsed.data.context,
-      status: "new",
-    });
-    return null;
-  });
+  const err = reportUser(user.id, parsed.data.code, parsed.data.reason, parsed.data.detail, parsed.data.context);
   if (err) return NextResponse.json({ error: err }, { status: 404 });
   return NextResponse.json({ ok: true });
 }

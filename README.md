@@ -95,23 +95,58 @@ Claude 호출이 실패하거나 결과가 이상해도(없는 id, 중복 배정
 
 ## 구조
 
+같은 규칙(매칭·초대장·로테이션·쪽지·직진·지갑)을 **지금의 Next 앱**과 **Supabase 서버 함수**가 함께 써요.
+규칙 코드는 `supabase/functions/_shared`에 한 벌만 있고, `src/lib`의 같은 이름 파일은 그걸 다시 내보내기만 해요.
+
 ```
-src/lib/ai.ts          Claude 연동 (구조화 출력 + 서버 측 대체 모델)
-src/lib/compat.ts      만남 성향, 원하는 상대 조건, 양방향 궁합 판정, 스펙트럼 색
-src/lib/heuristics.ts  규칙 기반 대체 로직, 성향 점수 계산
-src/lib/rotation.ts    1:1 로테이션 일정, 현재 라운드 계산
-src/lib/questions.ts   검사 문항과 태그 목록
-src/lib/store.ts       저장소 (메모리 + .data/hiro-db.json)
-src/lib/server.ts      쿠키 사용자, LiveKit 토큰, 화면용 상태
-src/app/api/*          API
-src/app/{start,quiz,me,lobby,room,admin}  화면
+supabase/functions/_shared/   공용 규칙 (Next·Deno 둘 다에서 돌아요)
+  ai.ts          Claude 연동 (구조화 출력 + 서버 측 대체 모델), 실패하면 규칙으로
+  compat.ts meet.ts   만남 성향, 양방향 조건, 서로 원하는 쌍 그래프
+  rotation.ts    1:1 로테이션 일정, 현재 라운드
+  lobby.ts       대기실 + AI 초대장 (바로 시작 / 예약)
+  slots.ts       테마 게시판·이벤트 세션
+  groups.ts      그룹 만들기 + 입장권 예치
+  notes.ts       쪽지·메모, 주인 찾기, 직진, 채팅, 입장권 차감
+  wallet.ts pricing.ts  도키 지갑
+  state.ts admin.ts reports.ts voice.ts   화면용 상태, 운영자, 신고, LiveKit
+  world.ts       규칙이 데이터를 읽고 쓰는 연결점
+  server/        서버 함수 전용: DB 연결·잠금, 로그인 확인, 테이블 ↔ 데이터 변환, 주기 처리
+supabase/functions/api/       서버 함수 'api' (주소 목록은 router.ts)
+supabase/functions/tests/     서버 함수 통합 테스트 (로컬 Postgres)
+supabase/migrations/          테이블·지갑 함수 (SQL)
+supabase/setup/cron.sql       1분마다 주기 처리를 부르는 예약 작업 (한 번만 실행)
+src/lib/store.ts              Next 앱 저장소 (메모리 + 파일 또는 DATABASE_URL)
+src/app/api/*  src/app/*      Next 앱의 API와 화면
 ```
+
+## Supabase 서버 함수
+
+서버 함수 `api`는 `https://<프로젝트 ref>.supabase.co/functions/v1/api/<주소>`로 불러요. 주소는 Next 앱의 `/api/<주소>`와 같아요.
+
+- **로그인**: 화면은 Supabase 로그인(익명 로그인 포함)으로 받은 토큰을 `Authorization: Bearer`로 보내요. 서버 함수가 Supabase 공개키로 확인해요.
+- **데이터**: 규칙이 바꾼 부분만 테이블에 저장해요. 데이터를 바꾸는 요청은 DB 잠금으로 하나씩 처리해서 서로 어긋나지 않아요.
+- **AI**: Claude를 기다리는 동안에는 잠그지 않아요. 다 고른 뒤 다시 확인하고 저장해요.
+- **주기 처리**: 화면이 상태를 물어볼 때, 그리고 `supabase/setup/cron.sql`의 예약 작업이 1분마다 처리해요.
+- **운영자 주소**(`/admin/*`)는 `x-admin-key` 헤더가 `HIRO_ADMIN_KEY`와 같아야 해요. 키를 정하지 않으면 닫혀 있어요.
+
+서버 함수 비밀값 (Supabase → Edge Functions → Secrets): `HIRO_ADMIN_KEY`, `HIRO_CRON_KEY`, `ANTHROPIC_API_KEY`(선택), `LIVEKIT_API_KEY`·`LIVEKIT_API_SECRET`·`LIVEKIT_URL`(선택), 그 밖의 `HIRO_*` 설정.
+`SUPABASE_URL`, `SUPABASE_DB_URL`은 Supabase가 자동으로 넣어 줘요. 비밀값은 코드나 채팅에 적지 마세요.
+
+로컬 테스트 (Deno 2, Postgres 16):
+
+```bash
+psql "$DB" -f supabase/tests/setup-roles.sql
+for f in supabase/migrations/*.sql; do psql "$DB" -f "$f"; done
+cd supabase/functions
+HIRO_DB_URL="$DB" HIRO_TEST_AUTH=1 deno test -A --config api/deno.json tests/
+```
+
+`HIRO_TEST_AUTH=1`은 테스트에서 로그인 없이 사용자를 지정하는 설정이에요. **배포 환경에는 절대 넣지 마세요.**
 
 ## 정식 서비스 전에 할 일
 
 - **본인인증**(PASS 등)으로 여성·성인 확인. 지금은 체크박스로만 확인해요.
-- **DB 교체**: 지금은 서버 한 대의 JSON 파일에 저장해요. Postgres(Supabase 등)로 바꿔야 해요.
-- **로그인**(카카오/애플), 신고·차단, 대화 중 비상 종료 버튼.
-- 서로 선택한 뒤의 **1:1 채팅**.
+- **화면을 Supabase로 연결**: 서버 함수는 준비됐어요. 화면(GitHub Pages)이 익명 로그인 + 서버 함수 주소를 쓰도록 바꾸는 단계가 남았어요.
+- **로그인**(카카오/애플), 차단, 대화 중 비상 종료 버튼.
 - 초대장·예약 알림(웹 푸시·카카오 알림톡). 지금은 히로 화면을 켜 둬야 바로 시작 초대장이 보여요.
 - 배포 서버 시간대를 `TZ=Asia/Seoul`로 설정하기 (예약 시간 계산이 서버 시간 기준이에요).

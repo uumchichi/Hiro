@@ -1,6 +1,5 @@
 // 서버 공용 도우미: 사용자 쿠키, 운영자 확인, LiveKit 토큰, 화면용 상태 계산
 import { cookies, headers } from "next/headers";
-import { AccessToken } from "livekit-server-sdk";
 import { mutate, newId, readDb } from "./store";
 import type { User } from "./types";
 
@@ -47,15 +46,7 @@ export async function isAdmin(): Promise<boolean> {
 
 export { livekitConfigured } from "./state";
 
-export async function livekitToken(identity: string, name: string, room: string) {
-  const at = new AccessToken(process.env.LIVEKIT_API_KEY, process.env.LIVEKIT_API_SECRET, {
-    identity,
-    name,
-    ttl: "20m",
-  });
-  at.addGrant({ room, roomJoin: true, canPublish: true, canSubscribe: true, canPublishData: true });
-  return at.toJwt();
-}
+export { livekitToken, livekitUrl } from "../../supabase/functions/_shared/voice.ts";
 
 export { publicMember, syncAllGroups, syncGroupStatus, viewState } from "./state";
 export type { PublicMember, ViewState } from "./state";

@@ -1,8 +1,8 @@
 // 테마 세션: 테마 게시판 유지, 신청, 대기실 입장, 시작 시간에 자동으로 그룹 만들기
 import { env } from "./env.ts";
 import { generateCatalog, splitSession } from "./ai.ts";
-import { createGroup } from "./groups.ts";
-import { GROUP_MIN, balancedPack, ruleCatalog } from "./heuristics.ts";
+import { BREAK_SECONDS, ROUND_SECONDS, createGroup } from "./groups.ts";
+import { GROUP_MAX, GROUP_MIN, balancedPack, ruleCatalog } from "./heuristics.ts";
 import { mutate, newId, readDb } from "./world.ts";
 import { canAfford } from "./wallet.ts";
 import type { DB, Slot, Theme } from "./types.ts";
@@ -130,8 +130,18 @@ export function createConfirmedSlot(db: DB, theme: Theme, startsAt: number, appl
 }
 
 export async function refreshCatalog() {
-  const users = Object.values(readDb().users).filter((u) => u.analysis);
-  const { themes, note, source } = await generateCatalog(users);
+  const out = await planCatalog(readDb());
+  applyCatalog(out);
+  return out;
+}
+
+/** AI 테마 에이전트에게 테마 목록을 받아요 (읽기만). */
+export function planCatalog(db: DB) {
+  return generateCatalog(Object.values(db.users).filter((u) => u.analysis));
+}
+
+/** 새 테마 목록으로 게시판을 바꿔요. */
+export function applyCatalog({ themes, note, source }: Awaited<ReturnType<typeof generateCatalog>>) {
   mutate((db) => {
     db.catalog = { createdAt: Date.now(), source, note, themes };
     db.catalogCursor = 0;
@@ -141,7 +151,6 @@ export async function refreshCatalog() {
     }
   });
   ensureSlots();
-  return { themes, note, source };
 }
 
 export function setApplied(userId: string, slotId: string, on: boolean) {
@@ -290,4 +299,30 @@ export function processDueSlots(now = Date.now()) {
       .catch((err) => console.error("[slots] formSlot failed", err))
       .finally(() => forming.delete(job.slotId));
   }
+}
+
+// ───────────── 화면용 ─────────────
+
+/** 테마 게시판: 앞으로 열릴 세션과 내가 신청한 세션 */
+export function slotsView(userId: string, now = Date.now()) {
+  const db = readDb();
+  const slots = Object.values(db.slots)
+    .filter((s) => s.applicants.includes(userId) || (!s.inviteOnly && (s.status === "open" || s.status === "forming")))
+    .sort((a, b) => a.startsAt - b.startsAt)
+    .map((s) => ({
+      id: s.id,
+      theme: { title: s.theme.title, emoji: s.theme.emoji, description: s.theme.description, tags: s.theme.tags },
+      startsAt: s.startsAt,
+      status: s.status,
+      applicants: s.applicants.length,
+      present: s.applicants.filter((id) => isPresentIn(db, s, id, now)).length,
+      applied: s.applicants.includes(userId),
+      curated: Boolean(s.curated),
+      capacity: s.capacity ?? null,
+      roundSeconds: s.roundSeconds ?? ROUND_SECONDS(),
+      canCheckIn: canCheckIn(s, now),
+      missed: s.missed.includes(userId),
+      note: s.applicants.includes(userId) ? s.note ?? null : null,
+    }));
+  return { now, slots, config: { min: GROUP_MIN, max: GROUP_MAX, checkinMinutes: CHECKIN_OPEN_MS / 60000, breakSeconds: BREAK_SECONDS() } };
 }
