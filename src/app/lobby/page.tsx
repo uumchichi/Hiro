@@ -144,7 +144,7 @@ export default function LobbyPage() {
               지금 대기실 {view.online}명
             </span>
             <Link href="/wallet" className="inline-flex items-center rounded-full bg-white/20 px-3 py-1.5 text-sm font-semibold backdrop-blur hover:bg-white/30">
-              🎟️ 입장권 {view.tickets}장
+              🎟️ 입장권 {view.tickets}장{view.tickets < 1 && view.canEnter ? " · 도키로 자동 교환" : ""}
             </Link>
             {view.inLobby ? (
               <button className="btn border border-white/50 py-2 text-sm text-white hover:bg-white/10" disabled={busy} onClick={() => send("/api/lobby", { action: "leave" })}>

@@ -29,6 +29,19 @@ export default function WalletPage() {
     setBusy(false);
   }
 
+  async function toggleAuto(on: boolean) {
+    // 바로 반영하고, 서버 저장이 실패하면 되돌려요.
+    setW((cur) => (cur ? { ...cur, autoExchange: on } : cur));
+    const res = await fetch("/api/wallet", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "autoExchange", on }) }).catch(() => null);
+    if (res?.ok) {
+      setW(await res.json());
+      setMsg(on ? "자동 교환을 켰어요." : "자동 교환을 껐어요.");
+    } else {
+      setW((cur) => (cur ? { ...cur, autoExchange: !on } : cur));
+      setMsg("설정을 바꾸지 못했어요. 다시 시도해 주세요.");
+    }
+  }
+
   if (!w) return <p className="pt-10 text-center text-muted">불러오는 중…</p>;
 
   return (
@@ -57,29 +70,46 @@ export default function WalletPage() {
 
       <section className="card space-y-3">
         <h2 className="text-lg font-bold">도키로 바꾸기</h2>
-        <p className="text-sm text-muted">미리 바꿔 두면 필요할 때 바로 쓸 수 있어요.</p>
+        <p className="text-sm text-muted">많이 바꿀수록 할인돼요. 바꾼 입장권·증표는 도키로 되돌리거나 환불할 수 없어요.</p>
         {(
           [
-            ["ticket", "🎟️ 입장권", w.prices.ticket, `로테이션 1회에 1장. 첫 1:1 대화가 ${w.ticketAfterSeconds}초 이상 이어졌을 때 차감돼요. 오류나 대화 상대가 없어 성사되지 않으면 돌려드려요.`],
-            ["badge", "💘 직진러의 증표", w.prices.badge, "직진 1회에 1개. 상대가 수락했을 때 차감되고, 거절하거나 응답이 없으면 돌려드려요."],
+            ["ticket", "🎟️ 입장권", `로테이션 1회에 1장. 첫 1:1 대화가 ${w.ticketAfterSeconds}초 이상 이어졌을 때 차감돼요. 오류나 대화 상대가 없어 성사되지 않으면 돌려드려요.`],
+            ["badge", "💘 직진러의 증표", "직진 1회에 1개. 상대가 수락했을 때 차감되고, 거절하거나 응답이 없으면 돌려드려요."],
           ] as const
-        ).map(([item, name, price, desc]) => (
+        ).map(([item, name, desc]) => (
           <div key={item} className="rounded-2xl border border-line p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="font-bold">
-                {name} <span className="font-normal text-muted">· {price}도키</span>
-              </p>
-              <div className="flex gap-2">
-                {[1, 3].map((n) => (
-                  <button key={n} className="btn-ghost py-2 text-sm" disabled={busy || w.doki < price * n} onClick={() => swap(item, n)}>
-                    {n}개 ({price * n}도키)
-                  </button>
-                ))}
-              </div>
+            <p className="font-bold">{name}</p>
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              {w.bundles[item].map((b) => (
+                <button
+                  key={b.count}
+                  className="flex flex-col items-center rounded-2xl border border-line px-2 py-2.5 text-sm hover:border-brand disabled:opacity-40"
+                  disabled={busy || w.doki < b.price}
+                  onClick={() => swap(item, b.count)}
+                >
+                  <span className="font-bold">{b.count}개</span>
+                  <span>
+                    {b.discount > 0 && <span className="mr-1 text-xs text-muted line-through">{b.full}</span>}
+                    {b.price}도키
+                  </span>
+                  {b.discount > 0 && <span className="text-xs font-semibold text-brand">{b.discount}% 할인</span>}
+                </button>
+              ))}
             </div>
             <p className="mt-2 text-xs text-muted">{desc}</p>
           </div>
         ))}
+        <label className="flex items-start gap-3 rounded-2xl bg-bg px-4 py-3 text-sm">
+          <input
+            type="checkbox"
+            className="mt-0.5 h-5 w-5 accent-[var(--brand)]"
+            checked={w.autoExchange}
+            onChange={(e) => toggleAuto(e.target.checked)}
+          />
+          <span>
+            <b>자동 교환</b>: 입장권이나 증표가 없을 때, 실제로 필요한 순간(그룹에 들어갈 때, 직진을 보낼 때)에만 도키로 1개를 바꿔요 (입장권 {w.prices.ticket}도키, 증표 {w.prices.badge}도키).
+          </span>
+        </label>
       </section>
 
       <section className="card space-y-3">

@@ -1,6 +1,6 @@
 // 쪽지 · 메모 · 쪽지의 주인 찾기 · 24시간 채팅방
 import { currentPhase, partnerIn } from "./rotation";
-import { TICKET_AFTER_MS, available, consume, hold, release } from "./wallet";
+import { TICKET_AFTER_MS, available, canAfford, consume, hold, release } from "./wallet";
 import { mutate, newId, readDb } from "./store";
 import type { Chat, DB, Group } from "./types";
 
@@ -339,6 +339,7 @@ export function reportView(userId: string, groupId: string, publicMember: (id: s
         sent: mine ? { to: publicMember(mine.to), message: mine.message, status: sentStatus, chatId: mine.chatId ?? null } : null,
         stage: straightStage(db, g, userId),
         badges: available(db, userId, "badge"),
+        canStraight: canAfford(db, userId, "badge"), // 증표가 없어도 자동 교환할 도키가 있으면 true
         candidates: straightStage(db, g, userId) === "open" ? straightCandidates(db, g, userId).map((id) => publicMember(id)) : [],
         received: Object.entries(g.straights ?? {})
           .filter(([, st]) => st.to === userId)

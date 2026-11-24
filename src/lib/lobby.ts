@@ -11,7 +11,7 @@ import { GROUP_MAX, GROUP_MIN, pairScore } from "./heuristics";
 import { upcomingCells } from "./schedule";
 import { catalogThemes, createConfirmedSlot } from "./slots";
 import { mutate, newId, readDb } from "./store";
-import { available as walletAvailable } from "./wallet";
+import { available as walletAvailable, canAfford } from "./wallet";
 import type { DB, Invite, Theme, User } from "./types";
 
 export const INVITE_TTL_MS = Number(process.env.HIRO_INVITE_SECONDS ?? 60) * 1000;
@@ -96,7 +96,7 @@ function availableNow(db: DB, now: number) {
       db.users[id].analysis &&
       !busy.has(id) &&
       isOnline(db, id, now) &&
-      walletAvailable(db, id, "ticket") >= 1,
+      canAfford(db, id, "ticket"),
   );
 }
 
@@ -104,7 +104,7 @@ function availableNow(db: DB, now: number) {
 function availableScheduled(db: DB) {
   const busy = busyWith(db, "scheduled");
   return Object.values(db.users)
-    .filter((u) => u.analysis && u.availability?.length && !busy.has(u.id) && walletAvailable(db, u.id, "ticket") >= 1)
+    .filter((u) => u.analysis && u.availability?.length && !busy.has(u.id) && canAfford(db, u.id, "ticket"))
     .map((u) => u.id);
 }
 
@@ -131,7 +131,7 @@ export function respond(userId: string, inviteId: string, accept: boolean): stri
       return null;
     }
     if (inv.kind === "scheduled" && hasClash(db, userId, inv.startsAt!)) return "그 시간 근처에 이미 확정된 예약이 있어요.";
-    if (walletAvailable(db, userId, "ticket") < 1) return "입장권이 필요해요. 내 지갑에서 도키로 바꿀 수 있어요.";
+    if (!canAfford(db, userId, "ticket")) return "입장권이 필요해요. 내 지갑에서 도키를 충전하거나 받을 수 있어요.";
     inv.accepted.push(userId);
     settle(db, inv, Date.now());
     return null;
@@ -158,12 +158,15 @@ function settle(db: DB, inv: Invite, now: number) {
   if (!full && !timeUp && !nobodyLeft) return;
 
   // 수락한 사람들(먼저 수락한 순서) 중에서, 각자 최소 MIN_PARTNERS명과 대화할 수 있는 그룹을 만들어요.
+  // 입장권(또는 자동 교환할 도키)이 없는 사람은 미리 빼서, 그룹 만들기가 헛돌지 않게 해요.
   const accepted = (inv.kind === "now" ? inv.accepted.filter((id) => db.users[id]?.status !== "grouped") : inv.accepted)
     .map((id) => db.users[id])
-    .filter(Boolean);
+    .filter((u) => u && canAfford(db, u.id, "ticket"));
   const viable = accepted.length <= GROUP_MAX ? prune(accepted, GROUP_MIN) : bestGroup(accepted, GROUP_MIN, GROUP_MAX);
   const members = viable ? viable.map((u) => u.id) : [];
 
+  // 그룹(또는 예약)을 실제로 만든 멤버. 입장권을 맡기지 못한 사람이 빠질 수 있어요.
+  let started: string[] | null = null;
   if (members.length >= GROUP_MIN) {
     if (inv.kind === "now") {
       const group = createGroup(db, {
@@ -172,14 +175,21 @@ function settle(db: DB, inv: Invite, now: number) {
         reason: `AI가 '${inv.theme.title}' 테마로 초대한 분들이에요.`,
         startInMs: START_IN_MS,
       });
-      inv.status = "started";
-      inv.groupId = group.id;
+      if (group) {
+        inv.status = "started";
+        inv.groupId = group.id;
+        started = group.memberIds;
+      }
     } else {
+      // 예약: 입장권은 그 시간에 그룹이 만들어질 때 맡겨요.
       const slot = createConfirmedSlot(db, inv.theme, inv.startsAt!, members);
       inv.status = "confirmed";
       inv.slotId = slot.id;
+      started = members;
     }
-    for (const id of inv.accepted.filter((id) => !members.includes(id))) {
+  }
+  if (started) {
+    for (const id of inv.accepted.filter((id) => !started.includes(id))) {
       bumpPriority(db, id, "이번 그룹에서는 대화할 수 있는 분이 모자랐거나 선착순이 마감됐어요. 다음 초대에서 우선으로 불러 드릴게요.");
     }
   } else if (timeUp || nobodyLeft) {
@@ -424,6 +434,7 @@ export function lobbyView(userId: string, now = Date.now()) {
     online: Object.keys(db.lobby).filter((id) => isOnline(db, id, now)).length,
     hasAvailability: Boolean(db.users[userId]?.availability?.length),
     tickets: walletAvailable(db, userId, "ticket"),
+    canEnter: canAfford(db, userId, "ticket"), // 입장권이 없어도 자동 교환할 도키가 있으면 true
     config: { min: GROUP_MIN, max: GROUP_MAX, inviteSeconds: INVITE_TTL_MS / 1000, roundSeconds: ROUND_SECONDS(), breakSeconds: BREAK_SECONDS() },
     themes: catalogThemes().map((t) => ({ id: t.id, title: t.title, emoji: t.emoji, description: t.description })),
     invite: showNow ? view(nowInv) : null,

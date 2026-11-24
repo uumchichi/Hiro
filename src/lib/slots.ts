@@ -3,7 +3,7 @@ import { generateCatalog, splitSession } from "./ai";
 import { createGroup } from "./groups";
 import { GROUP_MIN, ruleCatalog } from "./heuristics";
 import { mutate, newId, readDb } from "./store";
-import { available as walletAvailable } from "./wallet";
+import { canAfford } from "./wallet";
 import type { Slot, Theme } from "./types";
 
 const MIN = 60_000;
@@ -149,7 +149,7 @@ export function setApplied(userId: string, slotId: string, on: boolean) {
     if (!s || s.status !== "open") return "이미 마감된 세션이에요.";
     if (s.inviteOnly) return "초대받은 분만 참여할 수 있는 세션이에요.";
     if (on && s.capacity && !s.applicants.includes(userId) && s.applicants.length >= s.capacity) return "정원이 다 찼어요.";
-    if (on && !s.applicants.includes(userId) && walletAvailable(db, userId, "ticket") < 1) return "입장권이 필요해요. 내 지갑에서 도키로 바꿀 수 있어요.";
+    if (on && !s.applicants.includes(userId) && !canAfford(db, userId, "ticket")) return "입장권이 필요해요. 내 지갑에서 도키를 충전하거나 받을 수 있어요.";
     if (on && !s.applicants.includes(userId)) s.applicants.push(userId);
     if (!on) {
       s.applicants = s.applicants.filter((id) => id !== userId);
@@ -204,7 +204,7 @@ async function formSlot(slotId: string, now: number) {
   const slot = db.slots[slotId];
   const present = slot.applicants
     .map((id) => db.users[id])
-    .filter((u) => u && u.analysis && u.status !== "grouped" && isPresent(slot, u.id, now) && walletAvailable(db, u.id, "ticket") >= 1);
+    .filter((u) => u && u.analysis && u.status !== "grouped" && isPresent(slot, u.id, now) && canAfford(db, u.id, "ticket"));
   mutate((db) => {
     db.slots[slotId].status = "forming";
   });
@@ -234,7 +234,7 @@ async function formSlot(slotId: string, now: number) {
         startInMs: startAt - Date.now(),
         roundSeconds: s.roundSeconds,
       });
-      s.groupIds.push(group.id);
+      if (group) s.groupIds.push(group.id); // 입장권을 맡기지 못해 성립하지 않으면 건너뛰어요
     }
     const grouped = new Set(s.groupIds.flatMap((gid) => db.groups[gid].memberIds));
     s.missed = s.applicants.filter((id) => !grouped.has(id));

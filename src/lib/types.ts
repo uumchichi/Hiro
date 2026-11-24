@@ -202,6 +202,7 @@ export interface Wallet {
   badges: number; // 💘 직진러의 증표
   // 맡아 둔 아이템: 아직 차감 전. key 예: "group:g_abc", "straight:g_abc"
   holds: Record<string, { item: "ticket" | "badge"; at: number }>;
+  autoExchange?: boolean; // 입장권·증표가 없을 때 필요한 순간 도키로 1개씩 자동 교환 (기본 켜짐)
 }
 
 export interface WalletTxn {
