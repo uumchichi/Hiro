@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
+import { ApiStatus } from "@/components/ApiStatus";
 import { ChatBadge } from "@/components/NavBadge";
 import "./globals.css";
 
@@ -37,6 +38,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           </nav>
         </header>
         <main className="mx-auto max-w-3xl px-4 pb-20 sm:px-6">{children}</main>
+        <ApiStatus />
       </body>
     </html>
   );

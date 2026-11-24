@@ -132,6 +132,11 @@ src/app/api/*  src/app/*      Next 앱의 API와 화면
 서버 함수 비밀값 (Supabase → Edge Functions → Secrets): `HIRO_ADMIN_KEY`, `HIRO_CRON_KEY`, `ANTHROPIC_API_KEY`(선택), `LIVEKIT_API_KEY`·`LIVEKIT_API_SECRET`·`LIVEKIT_URL`(선택), 그 밖의 `HIRO_*` 설정.
 `SUPABASE_URL`, `SUPABASE_DB_URL`은 Supabase가 자동으로 넣어 줘요. 비밀값은 코드나 채팅에 적지 마세요.
 
+**문제가 생겼을 때**
+- 화면 아래에 빨간 안내가 떠요 (서버 상태 코드와 주소가 보여요). 546은 서버 함수의 자원 한도, 500은 서버 함수 안의 오류예요.
+- 운영자 점검: 브라우저 콘솔에서 `fetch(".../functions/v1/api/admin/diag", {headers: {"x-admin-key": "<운영자 키>"}})`를 부르면 DB 연결·잠금·데이터 불러오기를 단계별로 시간·메모리와 함께 보여 줘요.
+- 운영자 키를 `x-admin-key` 헤더로 함께 보낸 요청이 500이면 응답에 `detail`(오류의 정확한 이유)이 들어 있어요. 일반 사용자에게는 보이지 않아요.
+
 로컬 테스트 (Deno 2, Postgres 16):
 
 ```bash
