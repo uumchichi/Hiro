@@ -1,5 +1,7 @@
 // 히로 API 라우터: /functions/v1/api/<경로> 로 들어온 요청을 처리해요.
+import { env } from "../_shared/env.ts";
 import { authId, requireAdmin } from "../_shared/server/auth.ts";
+import { describeError } from "../_shared/server/diag.ts";
 import { db } from "../_shared/server/db.ts";
 import { CORS_HEADERS, HttpError, json, readJson } from "../_shared/server/http.ts";
 import { ensureUser } from "../_shared/server/users.ts";
@@ -10,6 +12,7 @@ import {
   postAdminLobby,
   postAdminSlot,
   postAdminWallet,
+  getDiag,
   postCatalog,
   postEvent,
   postReset,
@@ -67,6 +70,7 @@ const ROUTES: [string, Handler, Access?][] = [
   ["POST /reports", postUserReport],
   ["POST /voice/token", postVoiceToken],
   ["GET /admin/overview", getOverview, "admin"],
+  ["GET /admin/diag", getDiag, "admin"],
   ["POST /admin/seed", postSeed, "admin"],
   ["POST /admin/lobby", postAdminLobby, "admin"],
   ["POST /admin/slot", postAdminSlot, "admin"],
@@ -113,6 +117,10 @@ export async function handle(req: Request): Promise<Response> {
   } catch (err) {
     if (err instanceof HttpError) return json({ error: err.message, ...err.extra }, err.status);
     console.error("[api]", req.method, path, err);
-    return json({ error: "서버에서 문제가 생겼어요. 잠시 후 다시 시도해 주세요." }, 500);
+    const body: Record<string, unknown> = { error: "서버에서 문제가 생겼어요. 잠시 후 다시 시도해 주세요." };
+    // 운영자 키가 함께 온 요청에만 오류의 정확한 이유를 알려줘요 (일반 사용자에게는 내부 정보를 숨겨요).
+    const adminKey = env("HIRO_ADMIN_KEY");
+    if (adminKey && req.headers.get("x-admin-key") === adminKey) body.detail = describeError(err);
+    return json(body, 500);
   }
 }

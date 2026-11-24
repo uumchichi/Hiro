@@ -25,6 +25,8 @@ const WORLD_LOCK = 4_747_001;
 /** 트랜잭션 안에서 실행해요. 전역 잠금을 잡아서 데이터를 바꾸는 다른 요청과 겹치지 않아요. */
 export function tx<T>(fn: (t: Tx) => Promise<T>): Promise<T> {
   return db().begin(async (t) => {
+    // 잠금을 오래 기다리거나 쿼리가 오래 걸리면 포기해서, 요청이 쌓여 서버 함수가 자원 한도에 걸리지 않게 해요.
+    await t`select set_config('lock_timeout', '20s', true), set_config('statement_timeout', '30s', true)`;
     await t`select pg_advisory_xact_lock(${WORLD_LOCK})`;
     return fn(t);
   }) as Promise<T>;

@@ -38,18 +38,43 @@ async function accessToken(): Promise<string> {
   return signingIn;
 }
 
-/** fetch와 같지만 "/api/..." 주소를 알맞은 서버로 보내요. */
+/** 서버 연결 상태를 화면 위쪽 안내(ApiStatus)에 알려요. problem이 없으면 안내를 지워요. */
+export type ApiProblem = { path: string; status: number; message: string } | null;
+export const API_PROBLEM_EVENT = "hiro-api-problem";
+function report(problem: ApiProblem) {
+  try {
+    window.dispatchEvent(new CustomEvent<ApiProblem>(API_PROBLEM_EVENT, { detail: problem }));
+  } catch {
+    /* 서버 렌더링 중에는 무시 */
+  }
+}
+
+/** fetch와 같지만 "/api/..." 주소를 알맞은 서버로 보내요. 실패하면 화면에 안내가 떠요. */
 export async function apiFetch(url: string, init: RequestInit = {}): Promise<Response> {
   if (!usesSupabase || !url.startsWith("/api/")) return fetch(url, init);
-  const headers = new Headers(init.headers);
-  headers.set("authorization", `Bearer ${await accessToken()}`);
-  if (SUPABASE_ANON_KEY) headers.set("apikey", SUPABASE_ANON_KEY);
-  const res = await fetch(API_BASE + url.slice("/api".length), { ...init, headers });
-  if (res.status === 401) {
-    // 토큰이 만료됐으면 한 번 새로 받아서 다시 시도해요.
-    await supabase().auth.refreshSession();
+  const target = API_BASE + url.slice("/api".length);
+  let res: Response;
+  try {
+    const headers = new Headers(init.headers);
     headers.set("authorization", `Bearer ${await accessToken()}`);
-    return fetch(API_BASE + url.slice("/api".length), { ...init, headers });
+    if (SUPABASE_ANON_KEY) headers.set("apikey", SUPABASE_ANON_KEY);
+    res = await fetch(target, { ...init, headers });
+    if (res.status === 401) {
+      // 토큰이 만료됐으면 한 번 새로 받아서 다시 시도해요.
+      await supabase().auth.refreshSession();
+      headers.set("authorization", `Bearer ${await accessToken()}`);
+      res = await fetch(target, { ...init, headers });
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // 로그인(익명 로그인)이 거부된 경우와 네트워크 문제를 구분해 알려요.
+    report({ path: url, status: 0, message: /anonymous|sign.?in|signup/i.test(msg) ? `로그인에 실패했어요 (${msg})` : `서버에 연결하지 못했어요 (${msg})` });
+    throw err;
+  }
+  if (res.status >= 500 || res.status === 401) {
+    report({ path: url, status: res.status, message: res.status === 401 ? "로그인 확인에 실패했어요" : "서버에서 문제가 생겼어요" });
+  } else {
+    report(null);
   }
   return res;
 }

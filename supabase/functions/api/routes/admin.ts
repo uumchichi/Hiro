@@ -5,10 +5,16 @@ import { ALL_TAGS } from "../../_shared/questions.ts";
 import { applyCatalog, cancelEvent, createCuratedEvent, planCatalog } from "../../_shared/slots.ts";
 import { env } from "../../_shared/env.ts";
 import { tx } from "../../_shared/server/db.ts";
+import { runDiag } from "../../_shared/server/diag.ts";
 import { fail } from "../../_shared/server/http.ts";
 import { runTick } from "../../_shared/server/tick.ts";
 import { inWorld, snapshot } from "../../_shared/server/world-tx.ts";
 import type { Ctx } from "../router.ts";
+
+/** 서버 점검: 단계별 시간·메모리·오류를 한 번에 보여줘요. */
+export function getDiag() {
+  return runDiag();
+}
 
 export async function getOverview() {
   await runTick();
