@@ -39,10 +39,11 @@ jobs:
         with:
           version: latest
       - name: Link project
-        run: supabase link --project-ref "$PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+        run: supabase link --project-ref "$PROJECT_REF"
       # 이미 SQL Editor로 적용한 마이그레이션도 안전해요 (여러 번 적용해도 같은 결과가 되게 만들었어요)
       - name: Apply database migrations
-        run: supabase db push --password "$SUPABASE_DB_PASSWORD" --include-all
+        # DB 비밀번호는 환경변수 SUPABASE_DB_PASSWORD로 전달돼요. --linked: 위에서 연결한 Supabase 프로젝트에 적용
+        run: supabase db push --linked --include-all
       - name: Deploy Edge Function (api)
         run: supabase functions deploy api --project-ref "$PROJECT_REF" --no-verify-jwt
 
